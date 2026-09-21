@@ -1,0 +1,40 @@
+.jsc-calendar {
+  --jsc-border: var(--background-modifier-border);
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+  container-type: inline-size;
+}
+.jsc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.jsc-month { margin: 0; font-size: 1.25em; font-weight: 600; text-transform: capitalize; }
+.jsc-navigation { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.jsc-icon-button { padding: 6px 8px; }
+.jsc-icon-button svg { width: 16px; height: 16px; }
+.jsc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-left: 1px solid var(--jsc-border); border-top: 1px solid var(--jsc-border); border-radius: 8px; overflow: hidden; }
+.jsc-weekday { padding: 9px 4px; text-align: center; font-size: var(--font-ui-smaller); color: var(--text-muted); background: var(--background-secondary); border-right: 1px solid var(--jsc-border); border-bottom: 1px solid var(--jsc-border); }
+.jsc-week { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); min-height: 112px; }
+.jsc-day { grid-row: 1 / -1; min-width: 0; padding: 5px 7px; border-right: 1px solid var(--jsc-border); border-bottom: 1px solid var(--jsc-border); background: var(--background-primary); }
+.jsc-outside { background: var(--background-secondary); }
+.jsc-outside .jsc-day-number { color: var(--text-faint); }
+.jsc-day-number { display: inline-flex; align-items: center; justify-content: center; width: 25px; height: 25px; border-radius: 50%; margin-bottom: 5px; font-size: var(--font-ui-small); color: var(--text-muted); }
+.jsc-today .jsc-day-number { color: var(--text-on-accent); background: var(--interactive-accent); font-weight: 600; }
+.jsc-note { position: relative; z-index: 1; min-width: 0; margin: 2px 5px; display: block; padding: 3px 7px; border-radius: 4px; border-left: 2px solid var(--interactive-accent); background: var(--background-secondary); color: var(--text-normal); font-size: var(--font-ui-small); line-height: 20px; text-decoration: none; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; user-select: none; }
+.jsc-multiday { background: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary)); }
+.jsc-continues-before { margin-left: 0; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; padding-left: 17px; }
+.jsc-continues-after { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 17px; }
+.jsc-continues-before::before { content: '‹'; position: absolute; left: 4px; font-weight: 700; }
+.jsc-continues-after::after { content: '›'; position: absolute; right: 4px; font-weight: 700; }
+.jsc-note:hover { color: var(--text-normal); background: var(--background-modifier-hover); text-decoration: none; }
+.jsc-note:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
+.jsc-day:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
+.jsc-status { margin-top: 12px; color: var(--text-muted); font-size: var(--font-ui-small); }
+.jsc-help { margin-top: 5px; color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.jsc-unconfigured .jsc-grid, .jsc-unconfigured .jsc-help { display: none; }
+.jsc-unconfigured .jsc-status { padding: 32px 16px; text-align: center; border: 1px dashed var(--jsc-border); border-radius: 8px; }
+@container (max-width: 520px) {
+  .jsc-week { min-height: 90px; }
+  .jsc-day { padding: 4px 2px; }
+  .jsc-note { font-size: 11px; }
+  .jsc-month { font-size: 1.05em; }
+  .jsc-toolbar { gap: 6px; }
+}

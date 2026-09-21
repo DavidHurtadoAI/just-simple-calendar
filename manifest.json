@@ -1,0 +1,10 @@
+{
+  "id": "just-simple-calendar",
+  "name": "Just Simple Calendar",
+  "version": "1.0.0",
+  "minAppVersion": "1.10.2",
+  "description": "Keep calendars as light and simple as possible. A monthly Bases view with multi-day notes, previews and quick actions, without external libraries or community plugin dependencies.",
+  "author": "David Hurtado",
+  "authorUrl": "https://github.com/DavidHurtadoAI",
+  "isDesktopOnly": false
+}

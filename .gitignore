@@ -1,0 +1,9 @@
+node_modules/
+tsconfig.local.json
+qa/
+main.js
+qa-*.png
+TESTING.md
+tests/*smoke.js
+tests/*.min.js
+.npm-cache/
