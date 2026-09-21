@@ -109,10 +109,6 @@ Right-click a note and choose **Delete note**. This deletes the underlying note 
 | Day | Enter | Create a dated note |
 | Day | Shift+F10 | Open the day's context menu |
 
-## Try the example calendar
-
-The screenshots show the included [fictional demo](examples/README.md). Copy it into a test vault and navigate to **September 2026** to explore a full month of single-day notes, overlapping projects, and a workshop crossing into October.
-
 All screenshots are real captures from Obsidian. The visual theme is not bundled or required; the calendar follows your own theme and accent color.
 
 ## Scope and behavior
