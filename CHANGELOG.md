@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+- Build and publish releases directly in GitHub Actions.
+- Generate GitHub artifact attestations for `main.js`, `manifest.json`, and `styles.css` so users can verify their build provenance.
+- Verify the downloaded release assets against both the build and their attestations.
+- Document verification commands. Calendar behavior is unchanged.
+
 ## 1.0.0
 
 First public release.

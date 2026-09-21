@@ -135,6 +135,21 @@ The plugin uses web and Obsidian APIs compatible with desktop and mobile. Physic
 
 This is an independent plugin, not an official Obsidian product.
 
+## Verify release provenance
+
+Starting with **1.0.1**, tagged releases are built, tested, and published by GitHub Actions. All three installable files have [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations) linking their hashes to the source repository and build workflow.
+
+With the GitHub CLI installed and authenticated, download a release and verify its files:
+
+```sh
+gh release download 1.0.1 --repo DavidHurtadoAI/just-simple-calendar --dir calendar-release
+gh attestation verify calendar-release/main.js --repo DavidHurtadoAI/just-simple-calendar --signer-workflow DavidHurtadoAI/just-simple-calendar/.github/workflows/release.yml
+gh attestation verify calendar-release/styles.css --repo DavidHurtadoAI/just-simple-calendar --signer-workflow DavidHurtadoAI/just-simple-calendar/.github/workflows/release.yml
+gh attestation verify calendar-release/manifest.json --repo DavidHurtadoAI/just-simple-calendar --signer-workflow DavidHurtadoAI/just-simple-calendar/.github/workflows/release.yml
+```
+
+Attestations verify provenance and file integrity; they are not a guarantee that software is bug-free. This verification is optional and adds no runtime dependency to the plugin.
+
 ## Development
 
 Use Node.js 22.13 or later.

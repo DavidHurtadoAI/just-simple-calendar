@@ -1,0 +1,51 @@
+name: Release
+on:
+  push:
+    tags:
+      - '[0-9]*.[0-9]*.[0-9]*'
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Verify release tag
+        run: node -e "const m=require('./manifest.json'); if(process.env.GITHUB_REF_NAME !== m.version) throw Error('Tag and manifest version must match')"
+      - name: Attest installable assets
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; const version=process.env.GITHUB_REF_NAME; const notes=fs.readFileSync('CHANGELOG.md','utf8').split('## '+version+'\n')[1]?.split('\n## ')[0]; if(!notes) throw Error('Missing release notes'); fs.writeFileSync('release-notes.md', notes.trim()+'\n\nAll three installable assets were built and attested in GitHub Actions. See the README for verification commands.\n');"
+          gh release create "$GITHUB_REF_NAME" main.js manifest.json styles.css --verify-tag --title "Just Simple Calendar $GITHUB_REF_NAME" --notes-file release-notes.md
+      - name: Verify published assets and attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --dir published
+          for file in main.js manifest.json styles.css; do
+            cmp "$file" "published/$file"
+            gh attestation verify "published/$file" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+          done
