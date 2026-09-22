@@ -8,8 +8,9 @@ It adds a **new view type to Bases**. Your notes remain ordinary Markdown files,
 
 ## Small by design
 
-- Monthly calendar with **Previous month**, **Today**, and **Next month**.
+- Monthly calendar with **Previous year**, **Previous month**, **Today**, **Next month**, and **Next year**.
 - A selectable start date and an optional, inclusive end date.
+- An optional title property instead of the file name, with automatic fallback for missing or blank values.
 - Continuous bars for multi-day notes, with a continuation marker when they cross a week.
 - Separate lanes for overlapping notes.
 - Native hover previews and double-click to open.
@@ -33,9 +34,18 @@ Requires **Obsidian 1.10.2 or later**, with the built-in **Bases** feature enabl
 2. Open its view settings and choose **Simple Calendar** as the layout.
 3. Set **Date property** to your start date property, such as `start_date`.
 4. Optionally set **End date property (optional)** to `end_date`.
-5. Choose **First day of week**: Monday or Sunday.
+5. Optionally set **Title property (optional)** to the property you want to display, such as `title`.
+6. Choose **First day of week**: Monday or Sunday.
 
 Each view saves its own settings inside the `.base` file. You can use different date properties in different views of the same notes.
+
+Use the double-arrow buttons **«** and **»** to jump backward or forward one year while keeping the same month. The single arrows move one month, and **Today** returns to the current month. Thanks to [u/anchovybird](https://www.reddit.com/user/anchovybird/) for suggesting faster navigation to previous years.
+
+![Calendar navigation with previous year, previous month, Today, next month, and next year buttons](docs/images/year-navigation.png)
+
+The title property changes only the label shown on the calendar, including multi-day bars. Notes keep their file names, and previews and opening actions still target the original note. Leave the selector unset to use file names; missing, empty, or whitespace-only values also fall back to the file name. Thanks to [u/Nyrazoth](https://www.reddit.com/user/Nyrazoth/) for suggesting custom calendar titles.
+
+![Bases view settings showing the optional title property selector](docs/images/title-property.png)
 
 ![Bases view settings with both start and end date properties selected](docs/images/date-properties.png)
 

@@ -1,5 +1,5 @@
 import {
-  BasesView, DateValue, Menu, Notice, Platform, Plugin, parsePropertyId, setIcon,
+  BasesView, DateValue, Menu, Notice, NullValue, Platform, Plugin, parsePropertyId, setIcon,
   type BasesEntry, type HoverParent, type HoverPopover, type QueryController,
   type TFile, type WorkspaceLeaf,
 } from 'obsidian';
@@ -17,6 +17,7 @@ export default class JustSimpleCalendar extends Plugin {
       options: () => [
         { type: 'property', key: 'dateProperty', displayName: 'Date property', placeholder: 'Choose a date property' },
         { type: 'property', key: 'endDateProperty', displayName: 'End date property (optional)', placeholder: 'None — single-day notes' },
+        { type: 'property', key: 'titleProperty', displayName: 'Title property (optional)', placeholder: 'File name' },
         { type: 'dropdown', key: 'weekStart', displayName: 'First day of week', default: '1', options: { '1': 'Monday', '0': 'Sunday' } },
       ],
     });
@@ -42,6 +43,7 @@ class CalendarView extends BasesView implements HoverParent {
     const toolbar = this.root.createDiv({ cls: 'jsc-toolbar' });
     this.title = toolbar.createEl('h3', { cls: 'jsc-month', attr: { 'aria-live': 'polite' } });
     const nav = toolbar.createDiv({ cls: 'jsc-navigation' });
+    this.addButton(nav, 'Previous year', 'chevrons-left', () => this.moveMonth(-12));
     this.addButton(nav, 'Previous month', 'chevron-left', () => this.moveMonth(-1));
     const today = nav.createEl('button', { text: 'Today', attr: { type: 'button' } });
     this.registerDomEvent(today, 'click', () => {
@@ -49,6 +51,7 @@ class CalendarView extends BasesView implements HoverParent {
       this.render();
     });
     this.addButton(nav, 'Next month', 'chevron-right', () => this.moveMonth(1));
+    this.addButton(nav, 'Next year', 'chevrons-right', () => this.moveMonth(12));
     this.grid = this.root.createDiv({ cls: 'jsc-grid' });
     this.status = this.root.createDiv({ cls: 'jsc-status', attr: { role: 'status' } });
     this.help = this.root.createDiv({ cls: 'jsc-help' });
@@ -190,6 +193,7 @@ class CalendarView extends BasesView implements HoverParent {
     if (!this.data || !this.config) return;
     const property = this.config.getAsPropertyId('dateProperty');
     const endProperty = this.config.getAsPropertyId('endDateProperty');
+    const titleProperty = this.config.getAsPropertyId('titleProperty');
     const weekStart = this.config.get('weekStart') === '0' ? 0 : 1;
     const month = this.shownMonth.getMonth();
     const year = this.shownMonth.getFullYear();
@@ -244,12 +248,14 @@ class CalendarView extends BasesView implements HoverParent {
       });
       for (const segment of segments) {
         const {entry, start, end} = spans[segment.index];
+        const titleValue = titleProperty ? entry.getValue(titleProperty) : null;
+        const title = (titleValue && !(titleValue instanceof NullValue) ? titleValue.toString().trim() : '') || entry.file.basename;
         this.entries.set(entry.file.path, entry.file);
         const note = week.createEl('a', {
-          cls: 'jsc-note', text: entry.file.basename,
+          cls: 'jsc-note', text: title,
           attr: { href: entry.file.path, 'data-path': entry.file.path,
             'data-start': keys[segment.column], 'data-end': keys[segment.column + segment.length - 1],
-            'aria-label': `${entry.file.basename} — ${start === end ? start : `${start} through ${end}`}${segment.continuesBefore ? ' (continued)' : ''}` },
+            'aria-label': `${title} — ${start === end ? start : `${start} through ${end}`}${segment.continuesBefore ? ' (continued)' : ''}` },
         });
         note.style.gridColumn = `${segment.column + 1} / span ${segment.length}`;
         note.style.gridRow = String(segment.lane + 2);

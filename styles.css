@@ -5,9 +5,9 @@
   padding: 16px;
   container-type: inline-size;
 }
-.jsc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.jsc-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .jsc-month { margin: 0; font-size: 1.25em; font-weight: 600; text-transform: capitalize; }
-.jsc-navigation { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.jsc-navigation { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto; }
 .jsc-icon-button { padding: 6px 8px; }
 .jsc-icon-button svg { width: 16px; height: 16px; }
 .jsc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-left: 1px solid var(--jsc-border); border-top: 1px solid var(--jsc-border); border-radius: 8px; overflow: hidden; }
