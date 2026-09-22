@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- Add **Infinite Calendar**, a second Bases view with continuous weeks, fixed weekday headings, month/year markers, and a Today button. Thanks to [u/DudPug](https://www.reddit.com/user/DudPug/) for the suggestion.
+- Keep a bounded window of weeks and preserve the visible week and scroll position when loading more weeks, updating events, or resizing the panel.
+- Add previous-year and next-year buttons to **Simple Calendar**, keeping the selected month. Thanks to [u/anchovybird](https://www.reddit.com/user/anchovybird/) for the suggestion.
+- Add an optional **Title property** to both views, with filename fallback for missing or blank values. Thanks to [u/Nyrazoth](https://www.reddit.com/user/Nyrazoth/) for the suggestion.
+- Document all three improvements with real screenshots. Both views share previews, multi-day bars, and note actions, without runtime package dependencies.
+
 ## 1.0.1
 
 - Build and publish releases directly in GitHub Actions.

@@ -1,4 +1,19 @@
-# Validation for 1.0.0
+# Validation
+
+## 1.1.0
+
+Verified in the Windows development vault before release:
+
+- Ten automated calendar tests, including continuous week windows across leap days, daylight-saving transitions, and year boundaries.
+- Year buttons preserve the month, month navigation crosses year boundaries, and Today returns to the current month. The toolbar fits a 320 px panel.
+- Fifteen live checks cover custom titles, missing/blank values, numbers and booleans, safe text rendering, weekly segments, accessible labels, and opening the original note.
+- Fifty-four live Infinite Calendar checks cover bounded rendering, continuous dates, scrolling in both directions, variable-height weeks, adding/removing events above the viewport, resizing, week starts, custom titles, and note actions.
+- Native mouse-wheel input moved content exactly 100 px in both directions while the rendered week window shifted, without an extra scroll jump. Keyboard focus survives rerendering, and the monthly view retains its existing navigation.
+- The release workflow repeats a clean installation, lint, type checking, tests, build and audit, then attests the three installable assets and verifies their downloaded copies.
+
+Physical mobile-device testing remains pending. These checks do not claim an exhaustive theme matrix or large-vault benchmark.
+
+## 1.0.0
 
 Checked on September 21, 2026, in Obsidian 1.14.2 on Windows. This is an engineering validation record, not an Obsidian Community directory approval.
 

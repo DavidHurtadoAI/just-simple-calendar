@@ -38,7 +38,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          node --input-type=module -e "import fs from 'node:fs'; const version=process.env.GITHUB_REF_NAME; const notes=fs.readFileSync('CHANGELOG.md','utf8').split('## '+version+'\n')[1]?.split('\n## ')[0]; if(!notes) throw Error('Missing release notes'); fs.writeFileSync('release-notes.md', notes.trim()+'\n\nAll three installable assets were built and attested in GitHub Actions. See the README for verification commands.\n');"
+          node --input-type=module -e "import fs from 'node:fs'; const version=process.env.GITHUB_REF_NAME; const notes=fs.readFileSync('CHANGELOG.md','utf8').split('## '+version+'\n')[1]?.split('\n## ')[0]; if(!notes) throw Error('Missing release notes'); fs.writeFileSync('release-notes.md', notes.trim()+'\n\nAll three installable assets were built and attested in GitHub Actions.\n');"
           gh release create "$GITHUB_REF_NAME" main.js manifest.json styles.css --verify-tag --title "Just Simple Calendar $GITHUB_REF_NAME" --notes-file release-notes.md
       - name: Verify published assets and attestations
         env:
