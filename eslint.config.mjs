@@ -7,7 +7,7 @@ export default defineConfig([
   {
     languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
     rules: {
-      'obsidianmd/ui/sentence-case': ['error', { brands: ['Just Simple Calendar', 'Simple Calendar', 'Bases', 'Monday', 'Sunday'] }],
+      'obsidianmd/ui/sentence-case': ['error', { brands: ['Just Simple Calendar', 'Simple Calendar', 'Infinite Calendar', 'Bases', 'Monday', 'Sunday'] }],
     },
   },
 ]);

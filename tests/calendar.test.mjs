@@ -1,6 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dateRange, dayKey, layoutWeek, localDate, monthDays, parseDay } from '../calendar.ts';
+import { addDays, dateRange, dayKey, layoutWeek, localDate, monthDays, parseDay, startOfWeek, weekWindow } from '../calendar.ts';
+
+test('continuous week windows preserve dates across leap days, DST and year boundaries', () => {
+  for (const date of [localDate(2024, 1, 29), localDate(2026, 2, 29), localDate(2026, 9, 25), localDate(2026, 11, 31)]) {
+    for (const weekStart of [0, 1]) {
+      const first = startOfWeek(date, weekStart);
+      const days = weekWindow(first, 40);
+      assert.equal(first.getDay(), weekStart);
+      assert.equal(days.length, 280);
+      assert.equal(new Set(days.map(dayKey)).size, 280);
+      assert.ok(days.slice(0, 7).some(d => dayKey(d) === dayKey(date)));
+      assert.deepEqual(weekWindow(addDays(first, 84), 40).slice(0, 196).map(dayKey), days.slice(84).map(dayKey));
+      assert.equal(dayKey(addDays(addDays(first, -84), 84)), dayKey(first));
+    }
+  }
+});
 
 test('multi-day notes become one bar per week, with continuation markers', () => {
   const keys=['2026-09-21','2026-09-22','2026-09-23','2026-09-24','2026-09-25','2026-09-26','2026-09-27'];

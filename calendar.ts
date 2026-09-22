@@ -28,6 +28,18 @@ export function monthDays(year: number, month: number, weekStart: number): Date[
   return Array.from({ length: count }, (_, index) => localDate(year, month, 1 - offset + index));
 }
 
+export function addDays(date: Date, days: number): Date {
+  return localDate(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+export function startOfWeek(date: Date, weekStart: number): Date {
+  return addDays(date, -((date.getDay() - weekStart + 7) % 7));
+}
+
+export function weekWindow(first: Date, weeks: number): Date[] {
+  return Array.from({ length: weeks * 7 }, (_, index) => addDays(first, index));
+}
+
 /** Invalid end dates fall back to the start day, without hiding the note. */
 export function dateRange(start: string, end: string | null): { start: string; end: string; invalidEnd: boolean } | null {
   const first = parseDay(start);

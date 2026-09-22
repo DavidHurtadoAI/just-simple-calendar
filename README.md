@@ -9,6 +9,7 @@ It adds a **new view type to Bases**. Your notes remain ordinary Markdown files,
 ## Small by design
 
 - Monthly calendar with **Previous year**, **Previous month**, **Today**, **Next month**, and **Next year**.
+- A second **Infinite Calendar** view: scroll up into the past or down into the future through a continuous stream of weeks.
 - A selectable start date and an optional, inclusive end date.
 - An optional title property instead of the file name, with automatic fallback for missing or blank values.
 - Continuous bars for multi-day notes, with a continuation marker when they cross a week.
@@ -18,7 +19,7 @@ It adds a **new view type to Bases**. Your notes remain ordinary Markdown files,
 - Create a blank note from an empty day with its date already filled in.
 - Monday or Sunday week start, keyboard support, and styling that follows your theme.
 
-The JavaScript is approximately **11 KB uncompressed**. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
+The JavaScript is approximately **15 KB uncompressed**. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
 
 ## Install
 
@@ -31,7 +32,7 @@ Requires **Obsidian 1.10.2 or later**, with the built-in **Bases** feature enabl
 ## Set up a calendar
 
 1. Create or open a Base.
-2. Open its view settings and choose **Simple Calendar** as the layout.
+2. Open its view settings and choose **Simple Calendar** for a month, or **Infinite Calendar** for continuous weeks.
 3. Set **Date property** to your start date property, such as `start_date`.
 4. Optionally set **End date property (optional)** to `end_date`.
 5. Optionally set **Title property (optional)** to the property you want to display, such as `title`.
@@ -70,6 +71,18 @@ The start and end days are **both included**. September 21 through September 25 
 - Invalid or missing start date: the note is counted below the calendar but is not placed on a day.
 
 Month totals count **distinct notes**, not the number of occupied days. Ranges are clipped to the visible weeks, so a long-running note does not generate off-screen calendar cells.
+
+## Infinite Calendar
+
+![Infinite Calendar with continuous weeks, multi-day notes, and a month marker in the left margin](docs/images/infinite-calendar.png)
+
+Choose **Infinite Calendar** as a second Bases view type when you want to focus on weeks rather than separate months. Scroll upward into the past or downward into the future. Weekday headings stay visible; month/year markers appear in the left margin, and the first day of each month includes its abbreviated month name. **Today** returns to the current week.
+
+It uses the same date and title properties, week-start setting, previews, and note actions as Simple Calendar. Weeks continue across month and year boundaries without duplicating days. Multi-day notes remain continuous within each week.
+
+Only a bounded window of weeks is rendered. As that window moves, the visible week and its position are preserved, including when weeks have different heights. The footer counts distinct notes in the loaded weeks, not the entire Base.
+
+Thanks to [u/DudPug](https://www.reddit.com/user/DudPug/) for suggesting a continuous, scrollable calendar focused on weeks.
 
 ## Open, preview, and manage notes
 
@@ -112,7 +125,7 @@ All screenshots are real captures from Obsidian. The visual theme is not bundled
 
 ## Scope and behavior
 
-This is a monthly, date-based view. It intentionally leaves out hourly scheduling, drag-to-reschedule, recurrence rules, notifications, and external calendar synchronization.
+These are date-based views. They intentionally leave out hourly scheduling, drag-to-reschedule, recurrence rules, notifications, and external calendar synchronization.
 
 Bases supplies the filtered, sorted results. Notes are assigned to the first available lane in that order. Grouping does not produce separate calendars. Weeks grow to fit their notes; the calendar scrolls vertically.
 

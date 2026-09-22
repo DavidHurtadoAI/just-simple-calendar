@@ -31,6 +31,15 @@
 .jsc-help { margin-top: 5px; color: var(--text-faint); font-size: var(--font-ui-smaller); }
 .jsc-unconfigured .jsc-grid, .jsc-unconfigured .jsc-help { display: none; }
 .jsc-unconfigured .jsc-status { padding: 32px 16px; text-align: center; border: 1px dashed var(--jsc-border); border-radius: 8px; }
+.jsc-infinite { display: flex; flex-direction: column; overflow: hidden; }
+.jsc-infinite .jsc-toolbar, .jsc-infinite .jsc-status, .jsc-infinite .jsc-help { flex-shrink: 0; }
+.jsc-weekdays { display: grid; grid-template-columns: 28px repeat(7, minmax(0, 1fr)); flex-shrink: 0; border-top: 1px solid var(--jsc-border); border-left: 1px solid var(--jsc-border); }
+.jsc-viewport { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overflow-anchor: none; scrollbar-gutter: stable; overscroll-behavior: contain; }
+.jsc-infinite .jsc-grid { display: block; border-top: 0; border-radius: 0; overflow: visible; }
+.jsc-infinite .jsc-week { grid-template-columns: 28px repeat(7, minmax(0, 1fr)); }
+.jsc-month-rail { grid-column: 1; grid-row: 1 / -1; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; padding: 5px 2px; font-size: var(--font-ui-smaller); color: var(--text-muted); background: var(--background-secondary); border-left: 1px solid var(--jsc-border); }
+.jsc-infinite .jsc-day-number { width: auto; min-width: 25px; font-size: 11px; }
+.jsc-infinite.jsc-unconfigured .jsc-weekdays, .jsc-infinite.jsc-unconfigured .jsc-viewport { display: none; }
 @container (max-width: 520px) {
   .jsc-week { min-height: 90px; }
   .jsc-day { padding: 4px 2px; }
