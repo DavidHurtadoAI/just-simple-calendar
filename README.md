@@ -23,20 +23,9 @@ The JavaScript is approximately **11 KB uncompressed**. The plugin has **zero ru
 
 Requires **Obsidian 1.10.2 or later**, with the built-in **Bases** feature enabled. Enable the built-in **Page preview** feature if you want hover previews. These are Obsidian core features, not additional community plugins.
 
-### Manual installation
-
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/DavidHurtadoAI/just-simple-calendar/releases/latest).
-2. Create the folder `<your-vault>/.obsidian/plugins/just-simple-calendar/`.
-3. Place the three downloaded files directly in that folder.
-4. Reload Obsidian, then enable **Just Simple Calendar** under **Settings → Community plugins**.
-
-If you use a custom configuration folder, substitute that folder for `.obsidian`.
-
-### Optional: install through BRAT
-
-If you already use BRAT, add `DavidHurtadoAI/just-simple-calendar` as a beta plugin. BRAT is an optional installer; it is not required to run this plugin.
-
-The GitHub release is available immediately. Availability in Obsidian's Community plugins browser depends on the separate directory review process.
+1. Open **Settings → Community plugins → Browse** in Obsidian.
+2. Search for **Just Simple Calendar**.
+3. Select **Install**, then **Enable**.
 
 ## Set up a calendar
 
@@ -130,34 +119,6 @@ The plugin uses web and Obsidian APIs compatible with desktop and mobile. Physic
 - Viewing and opening notes does not rewrite them. Creating and deleting notes are explicit actions.
 
 This is an independent plugin, not an official Obsidian product.
-
-## Verify release provenance
-
-Starting with **1.0.1**, tagged releases are built, tested, and published by GitHub Actions. All three installable files have [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations) linking their hashes to the source repository and build workflow.
-
-With the GitHub CLI installed and authenticated, download a release and verify its files:
-
-```sh
-gh release download 1.0.1 --repo DavidHurtadoAI/just-simple-calendar --dir calendar-release
-gh attestation verify calendar-release/main.js --repo DavidHurtadoAI/just-simple-calendar --signer-workflow DavidHurtadoAI/just-simple-calendar/.github/workflows/release.yml
-gh attestation verify calendar-release/styles.css --repo DavidHurtadoAI/just-simple-calendar --signer-workflow DavidHurtadoAI/just-simple-calendar/.github/workflows/release.yml
-gh attestation verify calendar-release/manifest.json --repo DavidHurtadoAI/just-simple-calendar --signer-workflow DavidHurtadoAI/just-simple-calendar/.github/workflows/release.yml
-```
-
-Attestations verify provenance and file integrity; they are not a guarantee that software is bug-free. This verification is optional and adds no runtime dependency to the plugin.
-
-## Development
-
-Use Node.js 22.13 or later.
-
-```sh
-npm ci
-npm run check
-```
-
-The checks run the official Obsidian ESLint rules, TypeScript, calendar/layout tests, a production build, and release validation. The release audit checks version alignment, screenshot links, runtime imports, and the project's 25 KiB JavaScript size budget.
-
-The three installable files are `main.js`, `manifest.json`, and `styles.css`. See the [release checklist](docs/RELEASE-CHECKLIST.md) and [changelog](CHANGELOG.md) for details.
 
 ## License
 
