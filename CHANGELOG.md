@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+- Add **Linear Calendar**, a third native Bases view showing one month per row with aligned weekdays and previous-year, Today, and next-year navigation.
+- Outline each month, keep headings and month labels visible while scrolling, and use the full available height without a footer.
+- Display multi-day notes as continuous monthly bars with continuation markers, and single-day notes as colored blocks with titles available on hover and to screen readers.
+- Reuse date and title properties, previews, note creation, and opening/deletion actions, with no runtime dependencies.
+- Include a real Linear Calendar screenshot in the README. Thanks to [u/Quirky_Departure_409](https://www.reddit.com/user/Quirky_Departure_409/) for the suggestion and [Nick Milo's Linear Calendar video](https://www.youtube.com/watch?v=SQHYj7x-t3A) for the inspiration.
+
 ## 1.1.0
 
 - Add **Infinite Calendar**, a second Bases view with continuous weeks, fixed weekday headings, month/year markers, and a Today button. Thanks to [u/DudPug](https://www.reddit.com/user/DudPug/) for the suggestion.

@@ -3,19 +3,20 @@ import {
   type BasesEntry, type HoverParent, type HoverPopover, type QueryController,
   type TFile, type WorkspaceLeaf,
 } from 'obsidian';
-import { addDays, dateRange, dayKey, layoutWeek, localDate, monthDays, parseDay, startOfWeek, weekWindow } from './calendar';
+import { addDays, dateRange, dayKey, layoutDays, localDate, monthDays, parseDay, startOfWeek, weekWindow, yearMonths } from './calendar';
 
 const VIEW_TYPE = 'just-simple-calendar';
 const INFINITE_VIEW_TYPE = 'just-simple-calendar-infinite';
+const LINEAR_VIEW_TYPE = 'just-simple-calendar-linear';
 type ScrollAnchor = { day: string; offset: number };
 
 export default class JustSimpleCalendar extends Plugin {
   onload(): void {
     this.registerHoverLinkSource(VIEW_TYPE, { display: 'Just Simple Calendar', defaultMod: false });
-    for (const infinite of [false, true]) this.registerBasesView(infinite ? INFINITE_VIEW_TYPE : VIEW_TYPE, {
-      name: infinite ? 'Infinite Calendar' : 'Simple Calendar',
+    for (const mode of ['month', 'infinite', 'linear'] as const) this.registerBasesView(mode === 'linear' ? LINEAR_VIEW_TYPE : mode === 'infinite' ? INFINITE_VIEW_TYPE : VIEW_TYPE, {
+      name: mode === 'linear' ? 'Linear Calendar' : mode === 'infinite' ? 'Infinite Calendar' : 'Simple Calendar',
       icon: 'calendar-days',
-      factory: (controller, containerEl) => new CalendarView(controller, containerEl, infinite),
+      factory: (controller, containerEl) => new CalendarView(controller, containerEl, mode === 'infinite', mode === 'linear'),
       options: () => [
         { type: 'property', key: 'dateProperty', displayName: 'Date property', placeholder: 'Choose a date property' },
         { type: 'property', key: 'endDateProperty', displayName: 'End date property (optional)', placeholder: 'None — single-day notes' },
@@ -49,17 +50,18 @@ class CalendarView extends BasesView implements HoverParent {
   private rightLeaf: WorkspaceLeaf | null = null;
   private creatingNote = false;
 
-  constructor(controller: QueryController, parentEl: HTMLElement, private readonly infinite = false) {
+  constructor(controller: QueryController, parentEl: HTMLElement, private readonly infinite = false, private readonly linear = false) {
     super(controller);
-    this.type = infinite ? INFINITE_VIEW_TYPE : VIEW_TYPE;
+    this.type = linear ? LINEAR_VIEW_TYPE : infinite ? INFINITE_VIEW_TYPE : VIEW_TYPE;
     this.root = parentEl.createDiv({ cls: 'jsc-calendar' });
     this.root.toggleClass('jsc-infinite', infinite);
+    this.root.toggleClass('jsc-linear', linear);
     const toolbar = this.root.createDiv({ cls: 'jsc-toolbar' });
     this.title = toolbar.createEl('h3', { cls: 'jsc-month', attr: { 'aria-live': 'polite' } });
     const nav = toolbar.createDiv({ cls: 'jsc-navigation' });
     if (!infinite) {
       this.addButton(nav, 'Previous year', 'chevrons-left', () => this.moveMonth(-12));
-      this.addButton(nav, 'Previous month', 'chevron-left', () => this.moveMonth(-1));
+      if (!linear) this.addButton(nav, 'Previous month', 'chevron-left', () => this.moveMonth(-1));
     }
     const today = nav.createEl('button', { text: 'Today', attr: { type: 'button' } });
     this.registerDomEvent(today, 'click', () => {
@@ -68,11 +70,11 @@ class CalendarView extends BasesView implements HoverParent {
       this.render();
     });
     if (!infinite) {
-      this.addButton(nav, 'Next month', 'chevron-right', () => this.moveMonth(1));
+      if (!linear) this.addButton(nav, 'Next month', 'chevron-right', () => this.moveMonth(1));
       this.addButton(nav, 'Next year', 'chevrons-right', () => this.moveMonth(12));
     }
     this.weekdays = infinite ? this.root.createDiv({ cls: 'jsc-weekdays' }) : this.root;
-    this.viewport = infinite ? this.root.createDiv({ cls: 'jsc-viewport', attr: { tabindex: '0', 'aria-label': 'Scrollable calendar weeks' } }) : this.root;
+    this.viewport = infinite || linear ? this.root.createDiv({ cls: 'jsc-viewport', attr: { tabindex: '0', 'aria-label': linear ? 'Scrollable yearly calendar' : 'Scrollable calendar weeks' } }) : this.root;
     this.grid = this.viewport.createDiv({ cls: 'jsc-grid' });
     this.status = this.root.createDiv({ cls: 'jsc-status', attr: { role: 'status' } });
     this.help = this.root.createDiv({ cls: 'jsc-help' });
@@ -283,7 +285,7 @@ class CalendarView extends BasesView implements HoverParent {
     const weekStart = this.config.get('weekStart') === '0' ? 0 : 1;
     const month = this.shownMonth.getMonth();
     const year = this.shownMonth.getFullYear();
-    this.title.setText(new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(this.shownMonth));
+    this.title.setText(this.linear ? String(year) : new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(this.shownMonth));
     let targetAnchor = anchor;
     if (this.infinite) {
       if (!this.firstWeek || this.pendingToday) {
@@ -308,11 +310,13 @@ class CalendarView extends BasesView implements HoverParent {
       this.status.setText('Choose a date property in the view settings to display your notes.');
       return;
     }
-    const days = this.infinite
+    const days = this.linear
+      ? yearMonths(year).flat()
+      : this.infinite
       ? weekWindow(this.firstWeek!, Math.max(40, Math.ceil(this.viewport.clientHeight / 90) + 24))
       : monthDays(year, month, weekStart);
-    const monthFirst = dayKey(localDate(year, month, 1));
-    const monthLast = dayKey(localDate(year, month + 1, 0));
+    const monthFirst = dayKey(localDate(year, this.linear ? 0 : month, 1));
+    const monthLast = dayKey(localDate(year, this.linear ? 12 : month + 1, 0));
     const spans: {start: string; end: string; entry: BasesEntry}[] = [];
     let undated = 0;
     let invalidEnds = 0;
@@ -330,44 +334,56 @@ class CalendarView extends BasesView implements HoverParent {
     }
     const weekdayFormat = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
     if (this.infinite) this.weekdays.createDiv({ cls: 'jsc-weekday', attr: { 'aria-hidden': 'true' } });
-    for (const date of days.slice(0, 7)) {
-      (this.infinite ? this.weekdays : this.grid).createDiv({ cls: 'jsc-weekday', text: weekdayFormat.format(date) });
+    const headingDays = this.linear ? weekWindow(startOfWeek(localDate(year, 0, 1), weekStart), 6).slice(0, 37) : days.slice(0, 7);
+    if (this.linear) this.grid.createDiv({ cls: 'jsc-weekday jsc-linear-corner', text: 'Month' });
+    for (const date of headingDays) {
+      (this.infinite ? this.weekdays : this.grid).createDiv({ cls: 'jsc-weekday', text: this.linear ? weekdayFormat.format(date).slice(0, 2) : weekdayFormat.format(date) });
     }
     const todayKey = dayKey(new Date());
     const fullDateFormat = new Intl.DateTimeFormat('en-US', { dateStyle: 'full' });
-    for (let offset = 0; offset < days.length; offset += 7) {
-      const weekDays = days.slice(offset, offset + 7);
+    const rows = this.linear
+      ? Array.from({ length: 12 }, (_, m) => days.filter(date => date.getMonth() === m))
+      : Array.from({ length: days.length / 7 }, (_, i) => days.slice(i * 7, i * 7 + 7));
+    for (const [rowIndex, weekDays] of rows.entries()) {
+      const columnOffset = this.linear ? 2 + (weekDays[0].getDay() - weekStart + 7) % 7 : this.infinite ? 2 : 1;
       const keys = weekDays.map(dayKey);
-      const segments = layoutWeek(spans, keys);
+      const segments = layoutDays(spans, keys);
       const lanes = segments.reduce((max, segment) => Math.max(max, segment.lane + 1), 0);
       const week = this.grid.createDiv({cls: 'jsc-week', attr: { 'data-week': keys[0] }});
-      week.style.gridTemplateRows = `34px ${lanes ? `repeat(${lanes}, 30px) ` : ''}minmax(12px, 1fr)`;
+      week.style.gridTemplateRows = `${this.linear ? 24 : 34}px ${lanes ? `repeat(${lanes}, ${this.linear ? 22 : 30}px) ` : ''}minmax(12px, 1fr)`;
       if (this.infinite) {
         const boundary = weekDays.find(date => date.getDate() === 1);
-        const labelDate = boundary ?? (offset === 0 ? weekDays[0] : null);
+        const labelDate = boundary ?? (rowIndex === 0 ? weekDays[0] : null);
         week.createDiv({ cls: 'jsc-month-rail', text: labelDate ? new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(labelDate) : '' });
       }
+      if (this.linear) week.createDiv({ cls: 'jsc-linear-month', text: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(weekDays[0]) });
       weekDays.forEach((date, column) => {
         const key = dayKey(date);
         const cell = week.createEl('section', { cls: 'jsc-day', attr: { 'aria-label': fullDateFormat.format(date), 'data-date': key, tabindex: '0' } });
-        cell.style.gridColumn = String(column + (this.infinite ? 2 : 1));
-        cell.toggleClass('jsc-outside', !this.infinite && date.getMonth() !== month);
+        cell.style.gridColumn = String(column + columnOffset);
+        cell.toggleClass('jsc-outside', !this.infinite && !this.linear && date.getMonth() !== month);
+        cell.toggleClass('jsc-weekend', date.getDay() === 0 || date.getDay() === 6);
         cell.toggleClass('jsc-today', key === todayKey);
         const number = cell.createEl('time', { cls: 'jsc-day-number', text: this.infinite && date.getDate() === 1 ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date) : String(date.getDate()), attr: { datetime: key } });
         if (key === todayKey) number.setAttribute('aria-current', 'date');
       });
+      if (this.linear) {
+        const outline = week.createDiv({ cls: 'jsc-month-outline', attr: { 'aria-hidden': 'true' } });
+        outline.style.gridColumn = `${columnOffset} / span ${weekDays.length}`;
+      }
       for (const segment of segments) {
         const {entry, start, end} = spans[segment.index];
         const titleValue = titleProperty ? entry.getValue(titleProperty) : null;
         const title = (titleValue && !(titleValue instanceof NullValue) ? titleValue.toString().trim() : '') || entry.file.basename;
         this.entries.set(entry.file.path, entry.file);
         const note = week.createEl('a', {
-          cls: 'jsc-note', text: title,
+          cls: 'jsc-note', text: this.linear && start === end ? '' : title,
           attr: { href: entry.file.path, 'data-path': entry.file.path,
+            title: `${title} — ${start === end ? start : `${start} through ${end}`}`,
             'data-start': keys[segment.column], 'data-end': keys[segment.column + segment.length - 1],
             'aria-label': `${title} — ${start === end ? start : `${start} through ${end}`}${segment.continuesBefore ? ' (continued)' : ''}` },
         });
-        note.style.gridColumn = `${segment.column + (this.infinite ? 2 : 1)} / span ${segment.length}`;
+        note.style.gridColumn = `${segment.column + columnOffset} / span ${segment.length}`;
         note.style.gridRow = String(segment.lane + 2);
         note.toggleClass('jsc-continues-before', segment.continuesBefore);
         note.toggleClass('jsc-continues-after', segment.continuesAfter);
@@ -375,7 +391,7 @@ class CalendarView extends BasesView implements HoverParent {
       }
     }
     const count = this.infinite ? spans.length : inMonth;
-    const parts = [this.config.getDisplayName(property), `${count} ${count === 1 ? 'note' : 'notes'} ${this.infinite ? 'in loaded weeks' : 'this month'}`];
+    const parts = [this.config.getDisplayName(property), `${count} ${count === 1 ? 'note' : 'notes'} ${this.infinite ? 'in loaded weeks' : this.linear ? 'this year' : 'this month'}`];
     if (endProperty) parts.push(`End: ${this.config.getDisplayName(endProperty)}`);
     if (undated) parts.push(`${undated} without a valid date`);
     if (invalidEnds) parts.push(`${invalidEnds} with an invalid end date (shown on start date)`);

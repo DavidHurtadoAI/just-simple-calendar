@@ -40,6 +40,12 @@ export function weekWindow(first: Date, weeks: number): Date[] {
   return Array.from({ length: weeks * 7 }, (_, index) => addDays(first, index));
 }
 
+/** Twelve complete months, with each calendar day appearing exactly once. */
+export function yearMonths(year: number): Date[][] {
+  return Array.from({ length: 12 }, (_, month) =>
+    Array.from({ length: localDate(year, month + 1, 0).getDate() }, (_, day) => localDate(year, month, day + 1)));
+}
+
 /** Invalid end dates fall back to the start day, without hiding the note. */
 export function dateRange(start: string, end: string | null): { start: string; end: string; invalidEnd: boolean } | null {
   const first = parseDay(start);
@@ -60,23 +66,29 @@ export interface WeekSegment {
   continuesAfter: boolean;
 }
 
-/** One segment per note per week; bit masks keep overlapping notes in separate lanes. */
+/** One segment per note per week; overlapping notes use separate lanes. */
 export function layoutWeek(spans: CalendarSpan[], keys: string[]): WeekSegment[] {
   if (keys.length !== 7) throw new Error('A calendar week must contain seven days.');
-  const occupied: number[] = [];
+  return layoutDays(spans, keys);
+}
+
+/** A consecutive row of days, including whole months, without 32-bit masks. */
+export function layoutDays(spans: CalendarSpan[], keys: string[]): WeekSegment[] {
+  const occupied: Set<number>[] = [];
   const segments: WeekSegment[] = [];
   for (let index = 0; index < spans.length; index++) {
     const span = spans[index];
     const column = keys.findIndex(key => key >= span.start && key <= span.end);
     if (column < 0) continue;
     let last = column;
-    while (last < 6 && keys[last + 1] <= span.end) last++;
+    while (last < keys.length - 1 && keys[last + 1] <= span.end) last++;
     const length = last - column + 1;
-    const mask = ((1 << length) - 1) << column;
-    let lane = occupied.findIndex(bits => (bits & mask) === 0);
+    const columns = Array.from({ length }, (_, i) => column + i);
+    let lane = occupied.findIndex(cells => columns.every(c => !cells.has(c)));
     if (lane < 0) lane = occupied.length;
-    occupied[lane] = (occupied[lane] ?? 0) | mask;
-    segments.push({index, column, length, lane, continuesBefore: span.start < keys[0], continuesAfter: span.end > keys[6]});
+    occupied[lane] ??= new Set<number>();
+    for (const c of columns) occupied[lane].add(c);
+    segments.push({index, column, length, lane, continuesBefore: span.start < keys[0], continuesAfter: span.end > keys[keys.length - 1]});
   }
   return segments;
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addDays, dateRange, dayKey, layoutWeek, localDate, monthDays, parseDay, startOfWeek, weekWindow } from '../calendar.ts';
+import { addDays, dateRange, dayKey, layoutDays, layoutWeek, localDate, monthDays, parseDay, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
 
 test('continuous week windows preserve dates across leap days, DST and year boundaries', () => {
   for (const date of [localDate(2024, 1, 29), localDate(2026, 2, 29), localDate(2026, 9, 25), localDate(2026, 11, 31)]) {
@@ -93,4 +93,35 @@ test('year boundaries, leap February and DST months render correctly', () => {
   assert.equal(monthDays(2024, 1, 1).filter(d => d.getMonth() === 1).length, 29);
   assert.equal(monthDays(2026, 2, 1).filter(d => d.getMonth() === 2).length, 31);
   assert.equal(monthDays(2026, 9, 1).filter(d => d.getMonth() === 9).length, 31);
+});
+
+
+test('linear years contain each day once, including leap February and century rules', () => {
+  for (const [year, count] of [[2026, 365], [2024, 366], [2000, 366], [2100, 365]]) {
+    const rows = yearMonths(year);
+    assert.equal(rows.length, 12);
+    assert.equal(new Set(rows.flat().map(dayKey)).size, count);
+    rows.forEach((row, month) => {
+      assert.ok(row.every(day => day.getMonth() === month));
+      for (const start of [0, 1]) assert.ok((row[0].getDay() - start + 7) % 7 + row.length <= 37);
+    });
+  }
+});
+test('linear bars cross months and years and keep day 31 overlaps in separate lanes', () => {
+  const rows = yearMonths(2024);
+  const spans = [
+    { start: '2023-12-30', end: '2024-02-02' },
+    { start: '2024-01-31', end: '2024-01-31' },
+    { start: '2024-02-28', end: '2024-03-02' },
+  ];
+  const jan = layoutDays(spans, rows[0].map(dayKey));
+  assert.deepEqual(jan[0], { index: 0, column: 0, length: 31, lane: 0, continuesBefore: true, continuesAfter: true });
+  assert.equal(jan[1].column, 30);
+  assert.equal(jan[1].lane, 1);
+  const feb = layoutDays(spans, rows[1].map(dayKey));
+  assert.equal(feb[0].length, 2);
+  assert.equal(feb[1].length, 2);
+  assert.equal(feb[1].lane, 0);
+  assert.equal(feb[1].continuesAfter, true);
+  assert.equal(layoutDays(spans, rows[2].map(dayKey))[0].continuesBefore, true);
 });
