@@ -1,5 +1,19 @@
 # Validation
 
+## 1.2.0 — Linear Calendar
+
+Verified in the Windows development vault on September 23, 2026, using Obsidian 1.14.2:
+
+- Twelve automated tests pass, including leap-century rules, complete years, 31-day lane collisions, and bars crossing months and years.
+- Live annual-view checks verify all 365 weekday positions for both Monday and Sunday starts, leap February, year navigation, distinct-note totals, and cross-month continuation.
+- At 430 px, horizontal scrolling works; month labels and weekday headings remain fixed. Data refresh preserves horizontal scroll position.
+- Native hover dispatch, custom titles, context menus, opening to the right, double-click opening, and creation with a prefilled date were exercised. The disposable note was removed afterward.
+- The existing 54-check Infinite Calendar suite passes, including variable-height rows and preservation of the visible week during scrolling, resizing, and data updates. The suite waits for Bases to index its temporary fixtures before measuring row height.
+- Lint, strict type checking, build, and dependency/bundle audit pass. No runtime dependencies were added.
+- All twelve single-day demo events render without visible text, with the same fill as multi-day bars and full tooltip/accessibility titles. Month outlines match their first and last day; the annual viewport reaches the bottom of its container without a footer.
+
+Physical mobile testing and large-vault benchmarks remain pending.
+
 ## 1.1.0
 
 Verified in the Windows development vault before release:

@@ -2,7 +2,7 @@
 
 **The purpose is to make a calendar as lightweight and simple as possible, with no external libraries and no dependency on other community plugins.** That is why Just Simple Calendar exists: a small, focused way to see your notes on a calendar, using the features already built into Obsidian.
 
-It adds a **new view type to Bases**. Your notes remain ordinary Markdown files, your dates remain ordinary properties, and your Base keeps control of filtering and sorting. There is no separate event database, calendar framework, React runtime, account, or remote service.
+It adds **three calendar view types to Bases**. Your notes remain ordinary Markdown files, your dates remain ordinary properties, and your Base keeps control of filtering and sorting. There is no separate event database, calendar framework, React runtime, account, or remote service.
 
 ![A month of single-day events and continuous multi-day bars in Obsidian](docs/images/calendar-overview.png)
 
@@ -10,6 +10,7 @@ It adds a **new view type to Bases**. Your notes remain ordinary Markdown files,
 
 - Monthly calendar with **Previous year**, **Previous month**, **Today**, **Next month**, and **Next year**.
 - A second **Infinite Calendar** view: scroll up into the past or down into the future through a continuous stream of weeks.
+- A **Linear Calendar** view: a whole year with one month per row and aligned weekdays.
 - A selectable start date and an optional, inclusive end date.
 - An optional title property instead of the file name, with automatic fallback for missing or blank values.
 - Continuous bars for multi-day notes, with a continuation marker when they cross a week.
@@ -19,7 +20,7 @@ It adds a **new view type to Bases**. Your notes remain ordinary Markdown files,
 - Create a blank note from an empty day with its date already filled in.
 - Monday or Sunday week start, keyboard support, and styling that follows your theme.
 
-The JavaScript is approximately **15 KB uncompressed**. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
+The JavaScript is less than **25 KB uncompressed**. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
 
 ## Install
 
@@ -32,7 +33,7 @@ Requires **Obsidian 1.10.2 or later**, with the built-in **Bases** feature enabl
 ## Set up a calendar
 
 1. Create or open a Base.
-2. Open its view settings and choose **Simple Calendar** for a month, or **Infinite Calendar** for continuous weeks.
+2. Open its view settings and choose **Simple Calendar** for a month, **Infinite Calendar** for continuous weeks, or **Linear Calendar** for a year.
 3. Set **Date property** to your start date property, such as `start_date`.
 4. Optionally set **End date property (optional)** to `end_date`.
 5. Optionally set **Title property (optional)** to the property you want to display, such as `title`.
@@ -83,6 +84,18 @@ It uses the same date and title properties, week-start setting, previews, and no
 Only a bounded window of weeks is rendered. As that window moves, the visible week and its position are preserved, including when weeks have different heights. The footer counts distinct notes in the loaded weeks, not the entire Base.
 
 Thanks to [u/DudPug](https://www.reddit.com/user/DudPug/) for suggesting a continuous, scrollable calendar focused on weeks.
+
+## Linear Calendar
+
+![Linear Calendar with outlined month rows, multi-day bars, and single-day color blocks](docs/images/linear-calendar.png)
+
+Choose **Linear Calendar** for a yearly overview with one month per row. Each month starts under its correct weekday, so weekends align vertically. Use **Previous year**, **Today**, and **Next year** to navigate. Monday and Sunday week starts are supported.
+
+Multi-day notes form continuous bars across a month, with continuation markers when they cross into another month or year. Overlapping notes occupy separate lanes; busy months grow to fit them. Date and title properties, hover previews, and all note actions work just like the other views. Single-day notes appear as colored blocks without visible text; hover to read the title or preview the note. Their full titles remain available to screen readers. Multi-day bars keep their labels.
+
+Each month's days have a slightly stronger outline so the twelve horizontal month bars are easy to distinguish. The weekday header and month labels stay visible while scrolling. Narrow panes scroll horizontally to keep dates readable. This view omits the footer and bottom padding to give the calendar as much room as possible.
+
+Thanks to [u/Quirky_Departure_409](https://www.reddit.com/user/Quirky_Departure_409/) for suggesting a yearly linear view, and to Nick Milo for explaining this approach in his [Linear Calendar video](https://www.youtube.com/watch?v=SQHYj7x-t3A): seeing the whole year helps you spot busy periods and make room for what matters.
 
 ## Open, preview, and manage notes
 
