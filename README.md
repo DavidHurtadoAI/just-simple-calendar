@@ -66,6 +66,8 @@ Property names are your choice. There are no required folders, tags, templates, 
 
 ## Event colors
 
+![Calendar notes with different palette and hex colors, alongside notes using the default appearance](docs/images/event-colors.png)
+
 In any of the three views, select **Color property (optional)** and choose a text property such as `color`. The property name is up to you; each view saves its own selection.
 
 Use one of Obsidian's eight palette names: `red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `purple`, or `pink`. Names are case-insensitive and use your theme's palette, including its light and dark variants.
@@ -83,6 +85,8 @@ For a custom color, use three or six hexadecimal digits, for example `color: "#F
 The chosen color is used for the border and a soft background tint; text keeps the theme's normal text color. Hovering slightly strengthens the tint. Colors apply to every segment of a multi-day note and to single-day notes, including the text-free blocks in Linear Calendar.
 
 Leave the selector unset to keep the existing appearance. Missing, blank, invalid, or non-text values also use the default appearance. Other CSS color formats and alpha hex values are not supported. The calendar only reads this property; it does not rewrite notes or add a color to newly created notes.
+
+Thanks to [u/Quirky_Departure_409](https://www.reddit.com/user/Quirky_Departure_409/) for requesting event colors based on a frontmatter property.
 
 ## Multi-day notes
 
