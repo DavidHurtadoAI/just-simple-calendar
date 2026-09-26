@@ -1,9 +1,9 @@
 import {
-  BasesView, DateValue, Menu, Notice, NullValue, Platform, Plugin, parsePropertyId, setIcon,
+  BasesView, DateValue, Menu, Notice, NullValue, Platform, Plugin, StringValue, parsePropertyId, setIcon,
   type BasesEntry, type HoverParent, type HoverPopover, type QueryController,
   type TFile, type WorkspaceLeaf,
 } from 'obsidian';
-import { addDays, dateRange, dayKey, layoutDays, localDate, monthDays, parseDay, startOfWeek, weekWindow, yearMonths } from './calendar';
+import { addDays, dateRange, dayKey, eventColor, layoutDays, localDate, monthDays, parseDay, startOfWeek, weekWindow, yearMonths } from './calendar';
 
 const VIEW_TYPE = 'just-simple-calendar';
 const INFINITE_VIEW_TYPE = 'just-simple-calendar-infinite';
@@ -21,6 +21,7 @@ export default class JustSimpleCalendar extends Plugin {
         { type: 'property', key: 'dateProperty', displayName: 'Date property', placeholder: 'Choose a date property' },
         { type: 'property', key: 'endDateProperty', displayName: 'End date property (optional)', placeholder: 'None — single-day notes' },
         { type: 'property', key: 'titleProperty', displayName: 'Title property (optional)', placeholder: 'File name' },
+        { type: 'property', key: 'colorProperty', displayName: 'Color property (optional)', placeholder: 'Default color' },
         { type: 'dropdown', key: 'weekStart', displayName: 'First day of week', default: '1', options: { '1': 'Monday', '0': 'Sunday' } },
       ],
     });
@@ -282,6 +283,7 @@ class CalendarView extends BasesView implements HoverParent {
     const property = this.config.getAsPropertyId('dateProperty');
     const endProperty = this.config.getAsPropertyId('endDateProperty');
     const titleProperty = this.config.getAsPropertyId('titleProperty');
+    const colorProperty = this.config.getAsPropertyId('colorProperty');
     const weekStart = this.config.get('weekStart') === '0' ? 0 : 1;
     const month = this.shownMonth.getMonth();
     const year = this.shownMonth.getFullYear();
@@ -388,6 +390,12 @@ class CalendarView extends BasesView implements HoverParent {
         note.toggleClass('jsc-continues-before', segment.continuesBefore);
         note.toggleClass('jsc-continues-after', segment.continuesAfter);
         note.toggleClass('jsc-multiday', start !== end);
+        const colorValue = colorProperty ? entry.getValue(colorProperty) : null;
+        const color = eventColor(colorValue instanceof StringValue ? colorValue.toString() : null);
+        if (color) {
+          note.style.setProperty('--jsc-event-color', color);
+          note.addClass('jsc-colored');
+        }
       }
     }
     const count = this.infinite ? spans.length : inMonth;

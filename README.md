@@ -13,6 +13,7 @@ It adds **three calendar view types to Bases**. Your notes remain ordinary Markd
 - A **Linear Calendar** view: a whole year with one month per row and aligned weekdays.
 - A selectable start date and an optional, inclusive end date.
 - An optional title property instead of the file name, with automatic fallback for missing or blank values.
+- An optional color property: eight native color names or a custom hex color.
 - Continuous bars for multi-day notes, with a continuation marker when they cross a week.
 - Separate lanes for overlapping notes.
 - Native hover previews and double-click to open.
@@ -37,7 +38,8 @@ Requires **Obsidian 1.10.2 or later**, with the built-in **Bases** feature enabl
 3. Set **Date property** to your start date property, such as `start_date`.
 4. Optionally set **End date property (optional)** to `end_date`.
 5. Optionally set **Title property (optional)** to the property you want to display, such as `title`.
-6. Choose **First day of week**: Monday or Sunday.
+6. Optionally set **Color property (optional)** to a text property such as `color`.
+7. Choose **First day of week**: Monday or Sunday.
 
 Each view saves its own settings inside the `.base` file. You can use different date properties in different views of the same notes.
 
@@ -61,6 +63,26 @@ end_date: 2026-09-25
 ```
 
 Property names are your choice. There are no required folders, tags, templates, or naming conventions.
+
+## Event colors
+
+In any of the three views, select **Color property (optional)** and choose a text property such as `color`. The property name is up to you; each view saves its own selection.
+
+Use one of Obsidian's eight palette names: `red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `purple`, or `pink`. Names are case-insensitive and use your theme's palette, including its light and dark variants.
+
+```yaml
+---
+start_date: 2026-09-21
+end_date: 2026-09-25
+color: blue
+---
+```
+
+For a custom color, use three or six hexadecimal digits, for example `color: "#F80"` or `color: "#E57373"`. **Quote hex values in YAML** so the `#` is not treated as a comment.
+
+The chosen color is used for the border and a soft background tint; text keeps the theme's normal text color. Hovering slightly strengthens the tint. Colors apply to every segment of a multi-day note and to single-day notes, including the text-free blocks in Linear Calendar.
+
+Leave the selector unset to keep the existing appearance. Missing, blank, invalid, or non-text values also use the default appearance. Other CSS color formats and alpha hex values are not supported. The calendar only reads this property; it does not rewrite notes or add a color to newly created notes.
 
 ## Multi-day notes
 

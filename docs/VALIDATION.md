@@ -1,6 +1,18 @@
 # Validation
 
-## 1.2.0 — Linear Calendar
+## 1.3.0 - Event colors
+
+Verified on Windows in the development vault on September 26, 2026:
+
+- Fifteen automated calendar tests cover the eight palette names, normalization, three/six-digit hex values, and rejection of empty, non-text, malformed, and unsupported CSS values, in addition to existing date and layout coverage.
+- 260 live assertions exercise all three views with eight palette colors, both hex lengths, mixed case/whitespace, and seven fallback cases. Every continuation segment retains the note's color.
+- Computed borders, soft fills, and normal theme text colors match in light and dark mode. Linear single-day notes remain text-free; native previews and opening to the right still target the original note.
+- Changing or clearing the selected property restores default styling, and Infinite Calendar retains its scroll anchor during the change. Editing frontmatter updates the color without reopening the view; the selected property persists in the Base.
+- The local demos were inspected in the running application. During rapid temporary preview cleanup, Obsidian logged a native editor `onUnloadFile` RangeError; the rendering and note-opening assertions passed. Physical-device testing remains separate.
+
+Physical mobile testing and an exhaustive community-theme matrix remain pending.
+
+## 1.2.0 - Linear Calendar
 
 Verified in the Windows development vault on September 23, 2026, using Obsidian 1.14.2:
 

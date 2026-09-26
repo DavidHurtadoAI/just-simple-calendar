@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addDays, dateRange, dayKey, layoutDays, layoutWeek, localDate, monthDays, parseDay, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
+import { addDays, dateRange, dayKey, eventColor, layoutDays, layoutWeek, localDate, monthDays, parseDay, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
 
 test('continuous week windows preserve dates across leap days, DST and year boundaries', () => {
   for (const date of [localDate(2024, 1, 29), localDate(2026, 2, 29), localDate(2026, 9, 25), localDate(2026, 11, 31)]) {
@@ -124,4 +124,23 @@ test('linear bars cross months and years and keep day 31 overlaps in separate la
   assert.equal(feb[1].lane, 0);
   assert.equal(feb[1].continuesAfter, true);
   assert.equal(layoutDays(spans, rows[2].map(dayKey))[0].continuesBefore, true);
+});
+
+test('event colors use the eight native palette variables and ignore case/whitespace', () => {
+  for (const color of ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink']) {
+    assert.equal(eventColor(`  ${color.toUpperCase()}  `), `var(--color-${color})`);
+  }
+});
+
+test('event colors accept only three or six hexadecimal digits', () => {
+  assert.equal(eventColor('#F80'), '#f80');
+  assert.equal(eventColor(' #E57373 '), '#e57373');
+  assert.equal(eventColor('#000'), '#000');
+  assert.equal(eventColor('#FFFFFF'), '#ffffff');
+});
+
+test('missing, non-text and unsupported event colors use the default style', () => {
+  for (const value of [null, undefined, '', ' ', 0, true, ['red'], {color:'red'}, 'red, blue', 'navy', '#12', '#1234', '#12345', '#12345678', '#gggggg', '123456', 'rgb(255,0,0)', 'var(--text-normal)', 'red; color: blue', 'url(https://example.com)']) {
+    assert.equal(eventColor(value), null, String(value));
+  }
 });
