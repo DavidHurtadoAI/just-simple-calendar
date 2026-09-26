@@ -1,3 +1,11 @@
+/** Accept only the native palette or opaque three/six-digit hex colors. */
+export function eventColor(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const color = value.trim().toLowerCase();
+  if (/^(red|orange|yellow|green|cyan|blue|purple|pink)$/.test(color)) return `var(--color-${color})`;
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/.test(color) ? color : null;
+}
+
 /** Calendar dates stay local: a YYYY-MM-DD must never shift through UTC. */
 export function localDate(year: number, month: number, day: number): Date {
   const date = new Date(0);

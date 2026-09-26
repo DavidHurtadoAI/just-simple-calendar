@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0
+
+- Add **Color property (optional)** to Simple Calendar, Infinite Calendar, and Linear Calendar.
+- Accept the eight native palette names (red, orange, yellow, green, cyan, blue, purple, pink) or three/six-digit hex colors. Names ignore case and surrounding whitespace.
+- Apply a colored border and soft fill to single-day notes and every segment of multi-day notes, preserving theme text colors and native note actions.
+- Retain the default appearance when no property is selected or the value is missing, blank, invalid, or not text. No runtime dependencies were added.
+- Document setup, examples, and the need to quote hex values in YAML.
+
 ## 1.2.0
 
 - Add **Linear Calendar**, a third native Bases view showing one month per row with aligned weekdays and previous-year, Today, and next-year navigation.
