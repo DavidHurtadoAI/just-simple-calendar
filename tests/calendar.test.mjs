@@ -1,6 +1,54 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addDays, dateRange, dayKey, eventColor, layoutDays, layoutWeek, localDate, monthDays, parseDay, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
+import { addDays, dateRange, dayKey, eventColor, layoutDays, layoutWeek, localDate, monthDays, parseDay, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
+
+test('resizing creates an absent end date and can extend or shrink an inclusive range', () => {
+  for (const end of [undefined, null, '']) assert.equal(resizedEnd('2026-09-28', end, '2026-10-01'), '2026-10-01');
+  assert.equal(resizedEnd('2026-09-28', '2026-10-01', '2026-09-28'), '2026-09-28');
+  assert.equal(resizedEnd('2026-12-28', '2026-12-31', '2027-01-03'), '2027-01-03');
+  assert.equal(resizedEnd('2024-02-28', null, '2024-02-29'), '2024-02-29');
+});
+
+test('resizing preserves the end timestamp suffix, without deriving it from the start', () => {
+  assert.equal(resizedEnd('2026-09-28T08:00Z', '2026-09-30T18:30:02.123+02:00', '2026-10-25'), '2026-10-25T18:30:02.123+02:00');
+  assert.equal(resizedEnd('2026-09-28T08:00Z', null, '2026-10-01'), '2026-10-01');
+});
+
+test('resizing rejects dates before the start, invalid endpoints and invalid existing ranges', () => {
+  for (const to of ['2026-09-27', '2026-02-30', 'bad']) assert.equal(resizedEnd('2026-09-28', '2026-09-30', to), null);
+  for (const end of [false, 12, 'bad', '2026-09-27']) assert.equal(resizedEnd('2026-09-28', end, '2026-09-30'), null);
+  assert.equal(resizedEnd('bad', undefined, '2026-09-30'), null);
+});
+
+test('rescheduling preserves duration across month, leap, year and DST boundaries', () => {
+  for (const tz of ['Europe/Madrid', 'America/New_York', 'Pacific/Auckland', 'UTC']) {
+    process.env.TZ = tz;
+    for (const [start, end, to, expected] of [
+      ['2024-02-28', '2024-03-02', '2024-02-29', '2024-03-03'],
+      ['2026-12-30', '2027-01-02', '2027-01-01', '2027-01-04'],
+      ['2026-03-28', '2026-03-30', '2026-03-30', '2026-04-01'],
+      ['2026-10-25', '2026-10-27', '2026-10-23', '2026-10-25'],
+    ]) assert.deepEqual(shiftedDates(start, end, start, to), {start: to, end: expected}, tz);
+  }
+  delete process.env.TZ;
+});
+
+test('grabbing a continuation moves by the grabbed day; timestamps keep time and offset', () => {
+  assert.deepEqual(shiftedDates('2026-09-25T23:15:02.123+02:00', '2026-10-02T08:00Z', '2026-09-29', '2026-10-01'),
+    {start: '2026-09-27T23:15:02.123+02:00', end: '2026-10-04T08:00Z'});
+});
+
+test('single-day moves do not invent an end date; no-op and equal end dates remain valid', () => {
+  for (const end of [undefined, null, '']) assert.deepEqual(shiftedDates('2026-09-28', end, '2026-09-28', '2026-09-29'), {start:'2026-09-29'});
+  assert.deepEqual(shiftedDates('2026-09-28', '2026-09-28', '2026-09-28', '2026-09-28'), {start:'2026-09-28', end:'2026-09-28'});
+});
+
+test('rescheduling refuses malformed dates, reversed ranges and out-of-range years', () => {
+  for (const start of [undefined, 0, new Date(), '', '2026-02-30']) assert.equal(shiftedDates(start, null, '2026-09-28', '2026-09-29'), null);
+  for (const end of [false, ['2026-09-30'], 'invalid', '2026-09-27']) assert.equal(shiftedDates('2026-09-28', end, '2026-09-28', '2026-09-29'), null);
+  assert.equal(shiftedDates('2026-09-28', null, 'bad', '2026-09-29'), null);
+  assert.equal(shiftedDates('9999-12-30', '9999-12-31', '9999-12-30', '9999-12-31'), null);
+});
 
 test('continuous week windows preserve dates across leap days, DST and year boundaries', () => {
   for (const date of [localDate(2024, 1, 29), localDate(2026, 2, 29), localDate(2026, 9, 25), localDate(2026, 11, 31)]) {

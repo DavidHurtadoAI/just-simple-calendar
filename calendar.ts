@@ -64,6 +64,37 @@ export function dateRange(start: string, end: string | null): { start: string; e
   return { start: first, end: last, invalidEnd: false };
 }
 
+/** Shift written calendar dates without converting their time or UTC offset. */
+export function shiftedDates(start: unknown, end: unknown, from: string, to: string): { start: string; end?: string } | null {
+  if (typeof start !== 'string' || !parseDay(start) || !parseDay(from) || !parseDay(to)) return null;
+  const hasEnd = end !== undefined && end !== null && end !== '';
+  if (hasEnd && (typeof end !== 'string' || !parseDay(end) || end.trim().slice(0, 10) < start.trim().slice(0, 10))) return null;
+  const serial = (key: string): number => {
+    const [y, m, d] = key.split('-').map(Number);
+    const date = new Date(0);
+    date.setUTCFullYear(y, m - 1, d);
+    date.setUTCHours(0, 0, 0, 0);
+    return date.getTime() / 86400000;
+  };
+  const delta = serial(to) - serial(from);
+  const shift = (value: string): string => {
+    const [y, m, d] = parseDay(value)!.split('-').map(Number);
+    return dayKey(localDate(y, m - 1, d + delta)) + value.trim().slice(10);
+  };
+  const result = { start: shift(start), ...(hasEnd ? { end: shift(end) } : {}) };
+  return parseDay(result.start) && (!result.end || parseDay(result.end)) ? result : null;
+}
+
+/** Resizing changes only the inclusive end day, retaining an existing time/offset. */
+export function resizedEnd(start: string, end: unknown, to: string): string | null {
+  const first = parseDay(start);
+  const day = parseDay(to);
+  if (!first || !day || day < first) return null;
+  if (end === undefined || end === null || end === '') return day;
+  if (typeof end !== 'string' || !parseDay(end) || end.trim().slice(0, 10) < first) return null;
+  return day + end.trim().slice(10);
+}
+
 export interface CalendarSpan { start: string; end: string }
 export interface WeekSegment {
   index: number;
