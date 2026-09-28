@@ -16,7 +16,9 @@ It adds **three calendar view types to Bases**. Your notes remain ordinary Markd
 - An optional color property: eight native color names or a custom hex color.
 - Continuous bars for multi-day notes, with a continuation marker when they cross a week.
 - Separate lanes for overlapping notes.
-- Native hover previews and double-click to open.
+- Native hover previews and a configurable double-click action: open, new tab, or right-hand pane.
+- Drag notes to another day on desktop, updating their date properties and preserving multi-day durations.
+- Drag the right edge to change a note's end date, or add one to a single-day note.
 - Right-click actions to open, open in a new tab, open to the right, or delete.
 - Create a blank note from an empty day with its date already filled in.
 - Monday or Sunday week start, keyboard support, and styling that follows your theme.
@@ -40,6 +42,7 @@ Requires **Obsidian 1.10.2 or later**, with the built-in **Bases** feature enabl
 5. Optionally set **Title property (optional)** to the property you want to display, such as `title`.
 6. Optionally set **Color property (optional)** to a text property such as `color`.
 7. Choose **First day of week**: Monday or Sunday.
+8. Choose **Double-click action**: **Open note** (default), **Open in new tab**, or **Open to the right**.
 
 Each view saves its own settings inside the `.base` file. You can use different date properties in different views of the same notes.
 
@@ -47,7 +50,9 @@ Use the double-arrow buttons **«** and **»** to jump backward or forward one y
 
 ![Calendar navigation with previous year, previous month, Today, next month, and next year buttons](docs/images/year-navigation.png)
 
-The title property changes only the label shown on the calendar, including multi-day bars. Notes keep their file names, and previews and opening actions still target the original note. Leave the selector unset to use file names; missing, empty, or whitespace-only values also fall back to the file name. Thanks to [u/Nyrazoth](https://www.reddit.com/user/Nyrazoth/) for suggesting custom calendar titles.
+The title property changes the label shown on the calendar, including multi-day bars. You can select a text property, `aliases`, or a formula. Leave the selector unset to use file names; missing, empty, or whitespace-only values also fall back to the file name. Thanks to [u/Nyrazoth](https://www.reddit.com/user/Nyrazoth/) for suggesting custom calendar titles.
+
+Wikilinks such as `"[[Project plan|Launch plan]]"` and Bases link values display their readable labels as clickable links, including links in lists. Click a link to follow its destination using Obsidian's normal link behavior. The surrounding card still belongs to the original note: double-click its background to use the configured opening action, or right-click it for note actions. Plain aliases remain labels for the original note. Linear Calendar keeps single-day blocks text-free, with the readable title in their tooltip.
 
 ![Bases view settings showing the optional title property selector](docs/images/title-property.png)
 
@@ -127,7 +132,7 @@ Thanks to [u/Quirky_Departure_409](https://www.reddit.com/user/Quirky_Departure_
 
 Hover anywhere on a note or bar to preview it on desktop. By default no Ctrl/Cmd key is needed; this can be changed in **Settings → Page preview → Just Simple Calendar**.
 
-Double-click opens the note in the current pane. On mobile, tap once. A right-click on the note offers the actions below:
+In the view settings, **Double-click action** chooses whether a desktop double-click opens the note in the current pane, a new tab, or a pane to the right. The default is **Open note**, and each view saves its own choice. This applies to the card, including plain custom titles and aliases; a clickable link inside a title follows its own destination. On mobile, tap the card once to open it in the current pane. A right-click on the note offers the actions below:
 
 ![The note context menu: open, new tab, open to the right, and delete](docs/images/note-context-menu.png)
 
@@ -147,6 +152,24 @@ The selected start date property is already filled in. The folder, unique filena
 
 Creation requires a writable note property. File creation/modification dates and formula results can be displayed, but cannot be assigned by the calendar.
 
+### Move a note to another date
+
+On desktop, drag a card to another day in any of the three views. The destination day is highlighted. Dropping updates the selected start property in the note's frontmatter; if the note has an end date, both dates shift by the same number of calendar days to preserve its duration. Grab any day of a multi-day bar, including a continuation, and that day follows the pointer to the destination.
+
+The rest of the note is preserved. Datetime values keep their written time and UTC offset. Dropping on the same day, pressing Escape, or dropping outside the calendar leaves the note unchanged. Scroll to bring another date into view during a drag; Infinite Calendar keeps its loaded weeks stable until the drag finishes, then resumes its normal continuous scrolling.
+
+Moving requires writable note date properties. File dates, formulas, invalid date ranges, and a computed end property cannot be dragged. If a date changes in the file while you are dragging, the move is cancelled so it does not overwrite that edit. Moving a note can also make it leave the Base's current filters. Touch dragging is not supported.
+
+Thanks to [u/HowlOfTheSun](https://www.reddit.com/user/HowlOfTheSun/) for requesting drag-to-reschedule and reporting links that were shown as raw text in custom titles.
+
+### Resize a note's duration
+
+Set **End date property (optional)** in the view settings to enable resizing on desktop. Hover over a card's right edge and drag the small handle to its new last day. The proposed date range is highlighted while you drag. Dropping updates **only the end date**; the start date stays unchanged. You can extend a note or shorten it down to a single day, but not end it before it starts.
+
+**The note does not need an end date yet.** If it has none, resizing creates the selected end property on that note. Without an end property configured in the view, the resize handle is hidden. Start and end must be valid, distinct, writable note properties; a single-day note may have an empty end value.
+
+For notes spanning several rows, use the handle on the final segment, where the note actually ends. Resizing works across visible weeks and months in all three views. Existing end datetimes keep their time and UTC offset. Cancelled drags and concurrent date edits leave the note unchanged, just as when moving a card.
+
 ### Delete a note
 
 Right-click a note and choose **Delete note**. This deletes the underlying note file using Obsidian's configured deletion preference: system trash, vault trash, or permanent deletion. The calendar updates automatically.
@@ -164,7 +187,7 @@ All screenshots are real captures from Obsidian. The visual theme is not bundled
 
 ## Scope and behavior
 
-These are date-based views. They intentionally leave out hourly scheduling, drag-to-reschedule, recurrence rules, notifications, and external calendar synchronization.
+These are date-based views. They intentionally leave out hourly scheduling, recurrence rules, notifications, and external calendar synchronization.
 
 Bases supplies the filtered, sorted results. Notes are assigned to the first available lane in that order. Grouping does not produce separate calendars. Weeks grow to fit their notes; the calendar scrolls vertically.
 
@@ -178,7 +201,7 @@ The plugin uses web and Obsidian APIs compatible with desktop and mobile. Physic
 - No external services and no access to files outside the vault.
 - No community plugin dependencies and no bundled calendar or UI framework.
 - No custom note format, background synchronization, or self-updater.
-- Viewing and opening notes does not rewrite them. Creating and deleting notes are explicit actions.
+- Viewing and opening notes does not rewrite them. Creating, rescheduling, and deleting notes are explicit actions.
 
 This is an independent plugin, not an official Obsidian product.
 

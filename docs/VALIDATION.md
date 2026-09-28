@@ -1,5 +1,19 @@
 # Validation
 
+## 1.4.0 - Moving, resizing, title links, and double-click actions
+
+Verified in the Windows development vault on September 28, 2026:
+
+- Twenty-two unit tests pass. New date-shifting and resizing cases cover leap days, month/year boundaries, DST transitions in four time zones, continuation offsets, unchanged datetime time/offset suffixes, invalid ranges, creating missing end dates, and shrinking a range to one day.
+- `tests/obsidian-interactions.js` passes 137 assertions through real Bases views with disposable notes. It covers all three calendar types, drag feedback, single-day and multi-day moves, cancellation and same-day drops, readonly dates, custom titles/aliases/lists/formula links, native previews, colors, all three double-click actions, right-pane reuse, and saved settings after reopening.
+- `tests/obsidian-native-input.js` passes 27 assertions using Chromium mouse input and native drag data in the actual app. Dragging a linked title moves the card, both date properties update, cancellation preserves the file, and Enter on the title follows its link in all three views.
+- `tests/obsidian-resize.js` passes 77 assertions using native Chromium input across all three views. A configured end property enables resizing even when the note has no end value; an unset, read-only, or shared start/end property hides the handle. Tests cover range previews without writes, creating the selected end property, extending across rows/months, shrinking to one day, rejecting an end before the start, cancellation, timestamp preservation, and concurrent edits. Only the final segment has a handle, and the start and note body remain unchanged.
+- `tests/obsidian-edge-cases.js` passes seven assertions covering duplicate filenames in different folders, wikilink headings and display aliases, a date edited during a drag, atomic cancellation without partial writes, and the default double-click action. The expected conflict logs a move-cancelled error and displays a notice.
+- During a drag, Infinite Calendar retains its source DOM node when data changes or the viewport scrolls. Finishing or cancelling restores the same visible week and offset before bounded-window scrolling resumes.
+- ESLint, strict TypeScript checking, production build, and dependency/bundle audit pass. The bundle remains under 25 KiB with no runtime package dependencies.
+
+The interaction scripts run through Obsidian CLI `eval` in a development vault. They create and remove their own unique fixture folders; they are not Node unit tests. Touch dragging and physical mobile testing are not included.
+
 ## 1.3.0 - Event colors
 
 Verified on Windows in the development vault on September 26, 2026:

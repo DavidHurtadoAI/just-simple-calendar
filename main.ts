@@ -1,14 +1,18 @@
 import {
-  BasesView, DateValue, Menu, Notice, NullValue, Platform, Plugin, StringValue, parsePropertyId, setIcon,
-  type BasesEntry, type HoverParent, type HoverPopover, type QueryController,
-  type TFile, type WorkspaceLeaf,
+  BasesView, DateValue, Keymap, LinkValue, ListValue, Menu, Notice, NullValue, Platform, Plugin, StringValue, parseLinktext, parsePropertyId, setIcon,
+  type BasesAllOptions, type BasesEntry, type HoverParent, type HoverPopover, type QueryController,
+  type TFile, type Value, type WorkspaceLeaf,
 } from 'obsidian';
-import { addDays, dateRange, dayKey, eventColor, layoutDays, localDate, monthDays, parseDay, startOfWeek, weekWindow, yearMonths } from './calendar';
+import { addDays, dateRange, dayKey, eventColor, layoutDays, localDate, monthDays, parseDay, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from './calendar';
 
 const VIEW_TYPE = 'just-simple-calendar';
 const INFINITE_VIEW_TYPE = 'just-simple-calendar-infinite';
 const LINEAR_VIEW_TYPE = 'just-simple-calendar-linear';
 type ScrollAnchor = { day: string; offset: number };
+type OpenMode = 'current' | 'tab' | 'right';
+type MoveDates = { file: TFile; startProperty: string; endProperty: string | null; start: string; end: unknown };
+const DRAG_TYPE = 'application/x-just-simple-calendar';
+const TITLE_LINK = '.jsc-title :is(a, .internal-link, .external-link)';
 
 export default class JustSimpleCalendar extends Plugin {
   onload(): void {
@@ -17,12 +21,13 @@ export default class JustSimpleCalendar extends Plugin {
       name: mode === 'linear' ? 'Linear Calendar' : mode === 'infinite' ? 'Infinite Calendar' : 'Simple Calendar',
       icon: 'calendar-days',
       factory: (controller, containerEl) => new CalendarView(controller, containerEl, mode === 'infinite', mode === 'linear'),
-      options: () => [
+      options: (): BasesAllOptions[] => [
         { type: 'property', key: 'dateProperty', displayName: 'Date property', placeholder: 'Choose a date property' },
         { type: 'property', key: 'endDateProperty', displayName: 'End date property (optional)', placeholder: 'None — single-day notes' },
         { type: 'property', key: 'titleProperty', displayName: 'Title property (optional)', placeholder: 'File name' },
         { type: 'property', key: 'colorProperty', displayName: 'Color property (optional)', placeholder: 'Default color' },
         { type: 'dropdown', key: 'weekStart', displayName: 'First day of week', default: '1', options: { '1': 'Monday', '0': 'Sunday' } },
+        { type: 'dropdown', key: 'doubleClickAction', displayName: 'Double-click action', default: 'current', options: { current: 'Open note', tab: 'Open in new tab', right: 'Open to the right' } },
       ],
     });
   }
@@ -50,6 +55,10 @@ class CalendarView extends BasesView implements HoverParent {
   private entries = new Map<string, TFile>();
   private rightLeaf: WorkspaceLeaf | null = null;
   private creatingNote = false;
+  private moves = new Map<string, MoveDates>();
+  private drag: { dates: MoveDates; from: string; resize: boolean } | null = null;
+  private dropDay: HTMLElement | null = null;
+  private movingNote = false;
 
   constructor(controller: QueryController, parentEl: HTMLElement, private readonly infinite = false, private readonly linear = false) {
     super(controller);
@@ -101,25 +110,34 @@ class CalendarView extends BasesView implements HoverParent {
     // Delegate events to the stable root: rerenders do not accumulate listeners.
     this.registerDomEvent(this.grid, 'mouseover', (event) => {
       const el = this.noteElement(event.target);
-      if (!el || Platform.isMobile || (this.isNode(event.relatedTarget) && el.contains(event.relatedTarget))) return;
+      const link = this.titleLink(event.target);
+      const target = link ?? el;
+      if (!el || !target || this.drag || this.resizeHandle(event.target) || Platform.isMobile || (link && !link.hasClass('internal-link'))) return;
+      if (link) event.stopPropagation();
+      if (this.isNode(event.relatedTarget) && target.contains(event.relatedTarget)) return;
       const file = this.entries.get(el.dataset.path ?? '');
       if (!file) return;
       this.app.workspace.trigger('hover-link', {
-        event, source: VIEW_TYPE, hoverParent: this, targetEl: el,
-        linktext: file.path, sourcePath: file.path,
+        event, source: VIEW_TYPE, hoverParent: this, targetEl: target,
+        linktext: link?.dataset.href ?? file.path, sourcePath: file.path,
       });
-    });
+    }, true);
     this.registerDomEvent(this.grid, 'click', (event) => {
+      if (this.followTitleLink(event)) return;
       const el = this.noteElement(event.target);
-      if (!el) return;
+      if (!el || this.titleLink(event.target)) return;
       event.preventDefault();
       if (Platform.isMobile) this.openElement(el);
-    });
+    }, true);
+    this.registerDomEvent(this.grid, 'auxclick', event => { this.followTitleLink(event); }, true);
     this.registerDomEvent(this.grid, 'dblclick', (event) => {
       const el = this.noteElement(event.target);
-      if (Platform.isMobile) return;
+      if (Platform.isMobile || this.titleLink(event.target) || this.resizeHandle(event.target)) return;
       event.preventDefault();
-      if (el) this.openElement(el);
+      if (el) {
+        const mode = this.config.get('doubleClickAction');
+        this.openElement(el, mode === 'tab' || mode === 'right' ? mode : 'current');
+      }
       else {
         const day = this.dayElement(event.target)?.dataset.date;
         if (day) void this.createNote(day);
@@ -128,6 +146,15 @@ class CalendarView extends BasesView implements HoverParent {
     // Handle focused calendar keys before Bases' document-level shortcuts.
     this.registerDomEvent(this.root.win, 'keydown', (event) => {
       if (!this.isNode(event.target) || !this.grid.contains(event.target)) return;
+      const titleLink = this.titleLink(event.target);
+      if (titleLink) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          titleLink.click();
+        }
+        return;
+      }
       const el = this.noteElement(event.target);
       if (!el) {
         const cell = this.dayElement(event.target);
@@ -164,7 +191,151 @@ class CalendarView extends BasesView implements HoverParent {
       event.stopPropagation();
       if (el) this.showMenu(el, event.clientX, event.clientY);
       else if (day) this.showDayMenu(day, event.clientX, event.clientY);
+    }, true);
+    this.registerDomEvent(this.grid, 'dragstart', event => {
+      const note = this.noteElement(event.target);
+      const dates = this.moves.get(note?.dataset.path ?? '');
+      const resize = !!this.resizeHandle(event.target);
+      const from = resize ? note?.dataset.end : this.dayAtPoint(event.clientX, event.clientY)?.dataset.date;
+      if (!note || !dates || !from || !event.dataTransfer || this.movingNote || Platform.isMobile ||
+          (resize && (!dates.endProperty || dates.endProperty === dates.startProperty))) {
+        event.preventDefault();
+        return;
+      }
+      this.hoverPopover?.unload();
+      this.drag = { dates, from, resize };
+      event.dataTransfer.setData(DRAG_TYPE, dates.file.path);
+      event.dataTransfer.effectAllowed = 'move';
+      this.root.addClass('jsc-dragging');
+      this.root.toggleClass('jsc-resizing', resize);
     });
+    this.registerDomEvent(this.grid, 'dragover', event => {
+      if (!this.drag || !event.dataTransfer?.types.includes(DRAG_TYPE)) return;
+      this.dropDay?.removeClass('jsc-drop-target');
+      this.dropDay = this.dayAtPoint(event.clientX, event.clientY);
+      if (this.drag.resize) {
+        const to = this.dropDay?.dataset.date;
+        const end = to ? resizedEnd(this.drag.dates.start, this.drag.dates.end, to) : null;
+        const start = parseDay(this.drag.dates.start)!;
+        for (const cell of this.grid.querySelectorAll<HTMLElement>('.jsc-day')) {
+          cell.toggleClass('jsc-resize-range', !!end && cell.dataset.date! >= start && cell.dataset.date! <= to!);
+        }
+        if (!end) this.dropDay = null;
+      }
+      if (!this.dropDay) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      this.dropDay.addClass('jsc-drop-target');
+    });
+    this.registerDomEvent(this.grid, 'dragleave', event => {
+      if (!this.isNode(event.relatedTarget) || !this.grid.contains(event.relatedTarget)) {
+        this.dropDay?.removeClass('jsc-drop-target');
+        this.dropDay = null;
+        for (const cell of this.grid.querySelectorAll('.jsc-resize-range')) cell.removeClass('jsc-resize-range');
+      }
+    });
+    this.registerDomEvent(this.grid, 'drop', event => {
+      const drag = this.drag;
+      const to = this.dayAtPoint(event.clientX, event.clientY)?.dataset.date;
+      if (!drag || !to || event.dataTransfer?.getData(DRAG_TYPE) !== drag.dates.file.path) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.finishDrag();
+      if (to !== drag.from) void this.updateDates(drag.dates, drag.from, to, drag.resize);
+    });
+    this.registerDomEvent(this.grid, 'dragend', () => this.finishDrag());
+  }
+
+  private titleLink(target: EventTarget | null): HTMLElement | null {
+    return this.isNode(target) && target.instanceOf(Element) ? target.closest<HTMLElement>(TITLE_LINK) : null;
+  }
+
+  private resizeHandle(target: EventTarget | null): HTMLElement | null {
+    return this.isNode(target) && target.instanceOf(Element) ? target.closest<HTMLElement>('.jsc-resize-handle') : null;
+  }
+
+  private followTitleLink(event: MouseEvent): boolean {
+    const link = this.titleLink(event.target);
+    const file = this.entries.get(this.noteElement(event.target)?.dataset.path ?? '');
+    if (!link?.hasClass('internal-link') || !file || (event.button !== 0 && event.button !== 1)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    // Bases' shared renderer has no source-note context for relative links.
+    void this.app.workspace.openLinkText(link.dataset.href ?? '', file.path, Keymap.isModEvent(event));
+    return true;
+  }
+
+  private renderTitle(el: HTMLElement, value: Value | null, file: TFile): void {
+    if (value instanceof ListValue) {
+      for (let i = 0; i < value.length(); i++) {
+        if (i) el.appendText(', ');
+        this.renderTitle(el, value.get(i), file);
+      }
+    } else {
+      const text = value && !(value instanceof NullValue) ? value.toString().trim() : '';
+      const link = value instanceof LinkValue ? value : text ? LinkValue.parseFromString(this.app, text, file.path) : null;
+      if (link) link.renderTo(el, this.app.renderContext);
+      else el.appendText(text);
+    }
+  }
+
+  private dayAtPoint(x: number, y: number): HTMLElement | null {
+    const hit = this.grid.doc.elementFromPoint(x, y);
+    const week = hit?.closest('.jsc-week');
+    if (!week || !this.grid.contains(week) || hit?.closest('.jsc-linear-month, .jsc-month-rail')) return null;
+    // Bars overlay the cells; use the column underneath the pointer, including continuations.
+    return [...week.querySelectorAll<HTMLElement>('.jsc-day')].find(day => {
+      const rect = day.getBoundingClientRect();
+      return x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom;
+    }) ?? null;
+  }
+
+  private finishDrag(): void {
+    if (!this.drag) return;
+    this.drag = null;
+    this.dropDay?.removeClass('jsc-drop-target');
+    this.dropDay = null;
+    this.root.removeClass('jsc-dragging', 'jsc-resizing');
+    this.render();
+    if (this.infinite) this.handleScroll();
+  }
+
+  private moveDates(file: TFile, startDay: string, endDay: string): MoveDates | null {
+    const startProperty = this.writableDateProperty();
+    if (!startProperty) return null;
+    const endId = this.config.getAsPropertyId('endDateProperty');
+    const parsedEnd = endId ? parsePropertyId(endId) : null;
+    // A computed end could change the duration after moving its start.
+    if (parsedEnd && parsedEnd.type !== 'note') return null;
+    const endProperty = parsedEnd?.name ?? null;
+    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    const start: unknown = fm?.[startProperty];
+    const end: unknown = endProperty ? fm?.[endProperty] : undefined;
+    const shifted = shiftedDates(start, end, startDay, startDay);
+    if (!shifted || parseDay(shifted.start) !== startDay || (shifted.end ? parseDay(shifted.end) : startDay) !== endDay) return null;
+    return { file, startProperty, endProperty, start: start as string, end };
+  }
+
+  private async updateDates(dates: MoveDates, from: string, to: string, resize: boolean): Promise<void> {
+    if (this.movingNote) return;
+    this.movingNote = true;
+    try {
+      const end = resize ? resizedEnd(dates.start, dates.end, to) : null;
+      const shifted = resize ? end && dates.endProperty && dates.endProperty !== dates.startProperty ? { end } : null : shiftedDates(dates.start, dates.end, from, to);
+      if (!shifted) return;
+      await this.app.fileManager.processFrontMatter(dates.file, (fm: Record<string, unknown>) => {
+        const start: unknown = fm[dates.startProperty];
+        const end: unknown = dates.endProperty ? fm[dates.endProperty] : undefined;
+        if (start !== dates.start || end !== dates.end) throw new Error('Dates changed during the drag.');
+        if ('start' in shifted) Object.defineProperty(fm, dates.startProperty, { value: shifted.start, enumerable: true, writable: true, configurable: true });
+        if (dates.endProperty && shifted.end) Object.defineProperty(fm, dates.endProperty, { value: shifted.end, enumerable: true, writable: true, configurable: true });
+      });
+    } catch (error) {
+      console.error('Just Simple Calendar: could not update dates', error);
+      new Notice('Could not update this note. Its dates may have changed; try again.');
+    } finally {
+      this.movingNote = false;
+    }
   }
 
   private addButton(parent: HTMLElement, label: string, icon: string, action: () => void): void {
@@ -255,6 +426,8 @@ class CalendarView extends BasesView implements HoverParent {
 
   private handleScroll(): void {
     if (!this.firstWeek || !this.grid.querySelector('.jsc-week') || !this.root.isShown()) return;
+    // Keep the native drag source connected until drop or cancellation.
+    if (this.drag) { this.updateScrollLabel(); return; }
     // A resize can emit scroll before ResizeObserver runs; keep the pre-resize anchor.
     if (this.viewport.clientWidth !== this.layoutWidth || this.viewport.clientHeight !== this.layoutHeight) {
       this.render(this.scrollAnchor);
@@ -273,7 +446,7 @@ class CalendarView extends BasesView implements HoverParent {
   }
 
   private render(savedAnchor?: ScrollAnchor | null): void {
-    if (!this.data || !this.config) return;
+    if (!this.data || !this.config || this.drag) return;
     const anchor = this.infinite ? savedAnchor ?? this.captureAnchor() : null;
     const active = this.infinite ? this.root.doc.activeElement : null;
     const focusedNote = active && this.grid.contains(active) ? this.noteElement(active) : null;
@@ -306,6 +479,7 @@ class CalendarView extends BasesView implements HoverParent {
     }
     this.grid.empty();
     this.entries.clear();
+    this.moves.clear();
     this.help.setText(Platform.isMobile ? 'Tap a note to open it · Long-press a day to create a note' : 'Hover to preview · Double-click a note to open, or an empty space to create · Right-click for more');
     this.root.toggleClass('jsc-unconfigured', !property);
     if (!property) {
@@ -376,15 +550,34 @@ class CalendarView extends BasesView implements HoverParent {
       for (const segment of segments) {
         const {entry, start, end} = spans[segment.index];
         const titleValue = titleProperty ? entry.getValue(titleProperty) : null;
-        const title = (titleValue && !(titleValue instanceof NullValue) ? titleValue.toString().trim() : '') || entry.file.basename;
         this.entries.set(entry.file.path, entry.file);
-        const note = week.createEl('a', {
-          cls: 'jsc-note', text: this.linear && start === end ? '' : title,
-          attr: { href: entry.file.path, 'data-path': entry.file.path,
-            title: `${title} — ${start === end ? start : `${start} through ${end}`}`,
-            'data-start': keys[segment.column], 'data-end': keys[segment.column + segment.length - 1],
-            'aria-label': `${title} — ${start === end ? start : `${start} through ${end}`}${segment.continuesBefore ? ' (continued)' : ''}` },
+        const dates = this.moveDates(entry.file, start, end);
+        if (dates) this.moves.set(entry.file.path, dates);
+        const note = week.createDiv({
+          cls: 'jsc-note',
+          attr: { role: 'link', tabindex: '0', 'data-path': entry.file.path, draggable: String(!!dates && !Platform.isMobile),
+            'data-start': keys[segment.column], 'data-end': keys[segment.column + segment.length - 1] },
         });
+        const label = note.createSpan({ cls: 'jsc-title' });
+        this.renderTitle(label, titleValue, entry.file);
+        if (!label.textContent?.trim()) label.setText(entry.file.basename);
+        const title = label.textContent;
+        note.title = `${title} — ${start === end ? start : `${start} through ${end}`}`;
+        note.setAttribute('aria-label', `${note.title}${segment.continuesBefore ? ' (continued)' : ''}`);
+        for (const link of note.querySelectorAll<HTMLElement>(TITLE_LINK)) {
+          link.draggable = false;
+          link.setAttribute('role', 'link');
+          link.tabIndex = 0;
+          if (link.hasClass('internal-link')) {
+            const path = parseLinktext(link.dataset.href ?? '').path;
+            link.toggleClass('is-unresolved', !!path && !this.app.metadataCache.getFirstLinkpathDest(path, entry.file.path));
+          }
+        }
+        if (this.linear && start === end) label.remove();
+        if (dates?.endProperty && dates.endProperty !== dates.startProperty && !segment.continuesAfter && !Platform.isMobile) {
+          note.addClass('jsc-resizable');
+          note.createSpan({ cls: 'jsc-resize-handle', attr: { draggable: 'true', 'aria-hidden': 'true', title: 'Drag to resize end date' } });
+        }
         note.style.gridColumn = `${segment.column + columnOffset} / span ${segment.length}`;
         note.style.gridRow = String(segment.lane + 2);
         note.toggleClass('jsc-continues-before', segment.continuesBefore);
@@ -421,9 +614,9 @@ class CalendarView extends BasesView implements HoverParent {
     }
   }
 
-  private openElement(el: HTMLElement): void {
+  private openElement(el: HTMLElement, mode: OpenMode = 'current'): void {
     const file = this.entries.get(el.dataset.path ?? '');
-    if (file) void this.openFile(file, 'current');
+    if (file) void this.openFile(file, mode);
   }
 
   private showMenu(el: HTMLElement, x: number, y: number): void {
@@ -449,7 +642,7 @@ class CalendarView extends BasesView implements HoverParent {
     }
   }
 
-  private async openFile(file: TFile, mode: 'current' | 'tab' | 'right'): Promise<void> {
+  private async openFile(file: TFile, mode: OpenMode): Promise<void> {
     try {
       this.hoverPopover?.unload();
       let origin: WorkspaceLeaf | null = null;
@@ -477,6 +670,8 @@ class CalendarView extends BasesView implements HoverParent {
   onunload(): void {
     this.hoverPopover?.unload();
     this.entries.clear();
+    this.moves.clear();
+    this.drag = null;
     this.root.remove();
   }
 }

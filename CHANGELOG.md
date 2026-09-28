@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0
+
+- Drag cards to another day on desktop in all three views. Update the selected frontmatter dates together, preserving multi-day duration, datetime time/offset, other property values, and note content. Read-only or invalid date ranges cannot be moved, and concurrent date edits cancel the move.
+- Resize a card from its right edge to change only its inclusive end date. If the note has no end date, create it using the view's configured end property. Hide resize handles when no end property is configured; keep the start date fixed and reject ends before it.
+- Render wikilinks, aliases, lists, and Bases link values in custom titles. Internal links resolve relative to the source note and support keyboard activation. Card actions still target the original note. Thanks to [u/HowlOfTheSun](https://www.reddit.com/user/HowlOfTheSun/) for the drag request and title-link report.
+- Add a per-view **Double-click action** setting: **Open note**, **Open in new tab**, or **Open to the right**. The default remains the current pane; the right-hand pane is reused.
+- Preserve Infinite Calendar's scroll position and native drag source during dragging. No runtime dependencies were added.
+
 ## 1.3.0
 
 - Add **Color property (optional)** to Simple Calendar, Infinite Calendar, and Linear Calendar.
