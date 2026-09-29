@@ -1,5 +1,12 @@
 # Validation
 
+## 1.4.1 - Linear Calendar container styling
+
+Verified in the Windows development vault on September 29, 2026:
+
+- Thirty-six live assertions verify repeated switches between Linear Calendar, Simple Calendar, Infinite Calendar, and the native table view. The linear view keeps zero bottom padding, a hidden footer, and a working scroll viewport; other views retain their theme padding. Closing the view removes the container class.
+- All 22 unit tests, ESLint, strict TypeScript checking, production build, and release audit pass. No `:has()` selectors remain in the plugin stylesheet, and no runtime dependencies were added.
+
 ## 1.4.0 - Moving, resizing, title links, and double-click actions
 
 Verified in the Windows development vault on September 28, 2026:

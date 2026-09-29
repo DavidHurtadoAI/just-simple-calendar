@@ -58,7 +58,7 @@
   .jsc-month { font-size: 1.05em; }
   .jsc-toolbar { gap: 6px; }
 }
-.bases-view:has(> .jsc-linear) { padding-bottom: 0; }
+.bases-view.jsc-linear-container { padding-bottom: 0; }
 .jsc-linear { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
 .jsc-linear .jsc-help, .jsc-linear:not(.jsc-unconfigured) .jsc-status { display: none; }
 .jsc-linear .jsc-toolbar, .jsc-linear .jsc-status, .jsc-linear .jsc-help { flex-shrink: 0; }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1
+
+- Replace the `:has()` CSS selector with an explicit, lifecycle-managed container class to address the Obsidian community review warning. Linear Calendar keeps its full-height layout, and switching views restores their normal padding.
+
 ## 1.4.0
 
 - Drag cards to another day on desktop in all three views. Update the selected frontmatter dates together, preserving multi-day duration, datetime time/offset, other property values, and note content. Read-only or invalid date ranges cannot be moved, and concurrent date edits cancel the move.
