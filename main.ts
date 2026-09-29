@@ -66,6 +66,10 @@ class CalendarView extends BasesView implements HoverParent {
     this.root = parentEl.createDiv({ cls: 'jsc-calendar' });
     this.root.toggleClass('jsc-infinite', infinite);
     this.root.toggleClass('jsc-linear', linear);
+    if (linear) {
+      parentEl.addClass('jsc-linear-container');
+      this.register(() => parentEl.removeClass('jsc-linear-container'));
+    }
     const toolbar = this.root.createDiv({ cls: 'jsc-toolbar' });
     this.title = toolbar.createEl('h3', { cls: 'jsc-month', attr: { 'aria-live': 'polite' } });
     const nav = toolbar.createDiv({ cls: 'jsc-navigation' });
