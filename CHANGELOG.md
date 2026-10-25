@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0
+
+- Display optional start and end times from ISO or space-separated timestamps while keeping date-only events all-day.
+- Project daily, weekly, monthly and yearly repeats from an optional property without duplicating notes. Preserve duration and written times; clamp month ends using the original anchor.
+- Add independent per-view switches for help and status, and support bounded RGB/RGBA event colors alongside palette and hex values.
+- Keep recurrence inside loaded dates and report a 500-occurrence cap per series. Edit the source note to change a series; combined rules, exceptions and recurrence end dates remain unsupported.
+- Preserve Bases sorting, note links, configured opening actions and existing date-move protections.
+
+Validated with lint, type checking, 28 unit tests, release audit and real Obsidian checks across all three views.
+
 ## 1.4.1
 
 - Replace the `:has()` CSS selector with an explicit, lifecycle-managed container class to address the Obsidian community review warning. Linear Calendar keeps its full-height layout, and switching views restores their normal padding.
