@@ -23,7 +23,7 @@ It adds **three calendar view types to Bases**. Your notes remain ordinary Markd
 - Create a blank note from an empty day with its date already filled in.
 - Monday or Sunday week start, keyboard support, and styling that follows your theme.
 
-The JavaScript is less than **25 KB uncompressed**. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
+The JavaScript is less than **28 KiB uncompressed**. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
 
 ## Install
 
@@ -89,7 +89,7 @@ For a custom color, use three or six hexadecimal digits, for example `color: "#F
 
 The chosen color is used for the border and a soft background tint; text keeps the theme's normal text color. Hovering slightly strengthens the tint. Colors apply to every segment of a multi-day note and to single-day notes, including the text-free blocks in Linear Calendar.
 
-Leave the selector unset to keep the existing appearance. Missing, blank, invalid, or non-text values also use the default appearance. Other CSS color formats and alpha hex values are not supported. The calendar only reads this property; it does not rewrite notes or add a color to newly created notes.
+Leave the selector unset to keep the existing appearance. Missing, blank, invalid, or non-text values also use the default appearance. Numeric `rgb(12, 34, 56)` and `rgba(12, 34, 56, 0.4)` values are supported, including percentage channels. Other CSS formats and alpha hex values are unsupported. The calendar only reads this property; it does not rewrite notes or add a color to newly created notes.
 
 Thanks to [u/Quirky_Departure_409](https://www.reddit.com/user/Quirky_Departure_409/) for requesting event colors based on a frontmatter property.
 
@@ -187,11 +187,11 @@ All screenshots are real captures from Obsidian. The visual theme is not bundled
 
 ## Scope and behavior
 
-These are date-based views. They intentionally leave out hourly scheduling, recurrence rules, notifications, and external calendar synchronization.
+These are date-based views with optional event times and recurring occurrences. They leave out an hourly scheduling grid, notifications, and external calendar synchronization.
 
-Bases supplies the filtered, sorted results. Notes are assigned to the first available lane in that order. Grouping does not produce separate calendars. Weeks grow to fit their notes; the calendar scrolls vertically.
+Bases supplies the filtered, sorted results. Events are assigned to the first available lane in that order. Grouping does not produce separate calendars. Weeks grow to fit their notes; the calendar scrolls vertically.
 
-ISO date strings (`YYYY-MM-DD`) and ISO datetime strings are supported. String datetimes use their written calendar day; typed Bases dates use Bases' date-only value. The plugin's interface is in English. Your note titles, property names, and view names are preserved exactly as you write them.
+ISO date strings (`YYYY-MM-DD`) and datetimes separated by `T` or a space are supported. Timestamps use their written calendar day and show their time. Note date properties retain the original time and offset when moved. The plugin's interface is in English. Your note titles, property names, and view names are preserved exactly as you write them.
 
 The plugin uses web and Obsidian APIs compatible with desktop and mobile. Physical-device testing is documented separately from desktop mobile emulation in the [validation notes](docs/VALIDATION.md).
 
@@ -208,3 +208,11 @@ This is an independent plugin, not an official Obsidian product.
 ## License
 
 [MIT](LICENSE). Copyright 2026 David Hurtado.
+
+### Times, repeats and visibility
+
+Select an optional **Repeat property** in the Base view settings. Values include `d`, `w2`, `m3`, `y`, `daily`, `weekly`, `monthly`, `yearly`, `every week`, `every second month` or `every 3 days`. Occurrences open the original note; no files are duplicated. Durations and written times are preserved. Monthly/yearly repeats clamp to the last day using the original anchor (Jan 31 → Feb 28 → Mar 31). Combined rules such as `m3d4`, exceptions and recurrence end dates are unsupported; invalid rules show the original event once with a status warning.
+
+Projection is restricted to loaded dates and capped at 500 occurrences per note. A status warning reports the limit. Recurring bars cannot be dragged or resized: edit the source note to change the series.
+
+Optional times such as `2026-09-21 15:00` and `2026-09-21 18:00` appear beside the title. Date-only events remain all-day. **Show status** and **Show help** independently hide the footers and default to enabled.

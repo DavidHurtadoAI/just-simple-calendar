@@ -1,6 +1,56 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addDays, dateRange, dayKey, eventColor, layoutDays, layoutWeek, localDate, monthDays, parseDay, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
+import { addDays, dateRange, dayKey, eventColor, eventTime, layoutDays, layoutWeek, localDate, monthDays, parseDay, repeatRule, repeatSpans, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
+
+test('space and ISO timestamps display time, retain offsets on moves and reject malformed dates', () => {
+  for (const separator of [' ', 'T']) {
+    const start = `2026-09-21${separator}15:00`;
+    assert.equal(parseDay(start), '2026-09-21');
+    assert.equal(eventTime(start), '15:00');
+    assert.deepEqual(shiftedDates(start, `2026-09-21${separator}18:00+02:00`, '2026-09-21', '2026-10-25'), {start:`2026-10-25${separator}15:00`,end:`2026-10-25${separator}18:00+02:00`});
+  }
+  for (const value of [null, '2026-09-21', '2026-02-30 15:00', '2026-09-21 24:00', '2026-09-21 15:60']) assert.equal(eventTime(value), '');
+});
+
+test('rgb and rgba colors accept bounded channels and opacity without allowing arbitrary CSS', () => {
+  for (const color of ['rgb(12, 34, 255)','rgba(12,34,255,0.4)','rgba(100%, 0%, 12.5%, 50%)','rgba(1,2,3,.5)']) assert.equal(eventColor(color),color);
+  for (const color of ['rgba(256,0,0,1)','rgba(1,2,3,2)','rgba(101%,0%,0%,1)','rgb(1,2,3,1)','rgba(1,2,3)','rgba(-1,2,3,1)','url(https://example.test)','red;display:none']) assert.equal(eventColor(color),null);
+});
+
+test('repeat grammar is explicit and rejects ambiguous or unbounded rules', () => {
+  for (const [text, unit, interval] of [['d','day',1],['w2','week',2],['m3','month',3],['y4','year',4],['every week','week',1],['every second month','month',2],['every 12 days','day',12],[' DAILY ','day',1],['yearly','year',1]]) assert.deepEqual(repeatRule(text), {unit,interval});
+  for (const text of ['', 'w0', 'm-2', 'w1.5', 'd10000', 'm3d4', 'tomorrow', 'every 0 days', 'daily forever']) assert.equal(repeatRule(text), null);
+});
+
+test('monthly and yearly repeats retain their original anchor across short months and leap years', () => {
+  const project = (start, rule, first, last) => repeatSpans({start,end:start},repeatRule(rule),first,last).spans.map(span => span.start);
+  assert.deepEqual(project('2026-01-31','m','2026-01-01','2026-04-30'),['2026-01-31','2026-02-28','2026-03-31','2026-04-30']);
+  assert.deepEqual(project('2024-02-29','y','2025-01-01','2028-12-31'),['2025-02-28','2026-02-28','2027-02-28','2028-02-29']);
+  assert.deepEqual(project('2026-01-31','m2','2026-02-01','2026-08-31'),['2026-03-31','2026-05-31','2026-07-31']);
+  assert.deepEqual(project('2026-10-01','d','2026-09-01','2026-09-30'),[]);
+});
+
+test('repeat windows include overlapping multi-day occurrences and skip centuries without scanning them', () => {
+  assert.deepEqual(repeatSpans({start:'2026-09-21',end:'2026-09-24'},repeatRule('w2'),'2026-10-07','2026-10-08'),{spans:[{start:'2026-10-05',end:'2026-10-08'}],limited:false});
+  const daily=repeatSpans({start:'0001-01-01',end:'0001-01-01'},repeatRule('d'),'9999-12-29','9999-12-31');
+  assert.deepEqual(daily.spans.map(span => span.start),['9999-12-29','9999-12-30','9999-12-31']);
+  assert.equal(daily.limited,false);
+  assert.deepEqual(repeatSpans({start:'9999-12-31',end:'9999-12-31'},repeatRule('m'),'9999-12-01','9999-12-31').spans,[{start:'9999-12-31',end:'9999-12-31'}]);
+});
+
+test('repeat projection is DST-independent and caps pathological overlapping durations', () => {
+  for (const tz of ['Europe/Madrid','America/New_York','Pacific/Auckland','UTC']) {
+    process.env.TZ=tz;
+    const result=repeatSpans({start:'2026-03-28',end:'2026-03-30'},repeatRule('d'),'2026-03-29','2026-04-01');
+    assert.equal(result.spans.length,5,tz);
+    assert.equal(result.spans.at(-1).end,'2026-04-03',tz);
+  }
+  delete process.env.TZ;
+  const result=repeatSpans({start:'2000-01-01',end:'2100-01-01'},repeatRule('d'),'2050-01-01','2050-12-31');
+  assert.equal(result.spans.length,500);
+  assert.equal(result.limited,true);
+  for (const interval of [0,-1,NaN,1.5,Infinity]) assert.deepEqual(repeatSpans({start:'2026-01-01',end:'2026-01-01'},{unit:'day',interval},'2026-01-01','2026-12-31'),{spans:[],limited:false});
+});
 
 test('resizing creates an absent end date and can extend or shrink an inclusive range', () => {
   for (const end of [undefined, null, '']) assert.equal(resizedEnd('2026-09-28', end, '2026-10-01'), '2026-10-01');
@@ -188,7 +238,7 @@ test('event colors accept only three or six hexadecimal digits', () => {
 });
 
 test('missing, non-text and unsupported event colors use the default style', () => {
-  for (const value of [null, undefined, '', ' ', 0, true, ['red'], {color:'red'}, 'red, blue', 'navy', '#12', '#1234', '#12345', '#12345678', '#gggggg', '123456', 'rgb(255,0,0)', 'var(--text-normal)', 'red; color: blue', 'url(https://example.com)']) {
+  for (const value of [null, undefined, '', ' ', 0, true, ['red'], {color:'red'}, 'red, blue', 'navy', '#12', '#1234', '#12345', '#12345678', '#gggggg', '123456', 'var(--text-normal)', 'red; color: blue', 'url(https://example.com)']) {
     assert.equal(eventColor(value), null, String(value));
   }
 });
