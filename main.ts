@@ -3,7 +3,7 @@ import {
   type BasesAllOptions, type BasesEntry, type HoverParent, type HoverPopover, type QueryController,
   type TFile, type Value, type WorkspaceLeaf,
 } from 'obsidian';
-import { addDays, dateRange, dayKey, eventColor, layoutDays, localDate, monthDays, parseDay, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from './calendar';
+import { addDays, dateRange, dayKey, eventColor, eventTime, layoutDays, localDate, monthDays, parseDay, repeatRule, repeatSpans, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from './calendar';
 
 const VIEW_TYPE = 'just-simple-calendar';
 const INFINITE_VIEW_TYPE = 'just-simple-calendar-infinite';
@@ -26,6 +26,9 @@ export default class JustSimpleCalendar extends Plugin {
         { type: 'property', key: 'endDateProperty', displayName: 'End date property (optional)', placeholder: 'None — single-day notes' },
         { type: 'property', key: 'titleProperty', displayName: 'Title property (optional)', placeholder: 'File name' },
         { type: 'property', key: 'colorProperty', displayName: 'Color property (optional)', placeholder: 'Default color' },
+        { type: 'property', key: 'repeatProperty', displayName: 'Repeat property (optional)', placeholder: 'None — no repetition' },
+        { type: 'toggle', key: 'showStatus', displayName: 'Show status', default: true },
+        { type: 'toggle', key: 'showHelp', displayName: 'Show help', default: true },
         { type: 'dropdown', key: 'weekStart', displayName: 'First day of week', default: '1', options: { '1': 'Monday', '0': 'Sunday' } },
         { type: 'dropdown', key: 'doubleClickAction', displayName: 'Double-click action', default: 'current', options: { current: 'Open note', tab: 'Open in new tab', right: 'Open to the right' } },
       ],
@@ -283,6 +286,16 @@ class CalendarView extends BasesView implements HoverParent {
     }
   }
 
+  private dateText(entry: BasesEntry, property: Parameters<BasesEntry['getValue']>[0]): string {
+    const parsed = parsePropertyId(property);
+    const raw: unknown = parsed.type === 'note' ? this.app.metadataCache.getFileCache(entry.file)?.frontmatter?.[parsed.name] : null;
+    if (typeof raw === 'string' && parseDay(raw)) return raw.trim();
+    const value = entry.getValue(property);
+    if (!value?.isTruthy()) return '';
+    const text = value.toString();
+    return parseDay(text) ? text : value instanceof DateValue ? value.dateOnly().toString() : text;
+  }
+
   private dayAtPoint(x: number, y: number): HTMLElement | null {
     const hit = this.grid.doc.elementFromPoint(x, y);
     const week = hit?.closest('.jsc-week');
@@ -461,6 +474,9 @@ class CalendarView extends BasesView implements HoverParent {
     const endProperty = this.config.getAsPropertyId('endDateProperty');
     const titleProperty = this.config.getAsPropertyId('titleProperty');
     const colorProperty = this.config.getAsPropertyId('colorProperty');
+    const repeatProperty = this.config.getAsPropertyId('repeatProperty');
+    this.status.hidden = this.config.get('showStatus') === false;
+    this.help.hidden = this.config.get('showHelp') === false;
     const weekStart = this.config.get('weekStart') === '0' ? 0 : 1;
     const month = this.shownMonth.getMonth();
     const year = this.shownMonth.getFullYear();
@@ -497,20 +513,30 @@ class CalendarView extends BasesView implements HoverParent {
       : monthDays(year, month, weekStart);
     const monthFirst = dayKey(localDate(year, this.linear ? 0 : month, 1));
     const monthLast = dayKey(localDate(year, this.linear ? 12 : month + 1, 0));
-    const spans: {start: string; end: string; entry: BasesEntry}[] = [];
+    const spans: {start: string; end: string; entry: BasesEntry; time: string; repeating: boolean}[] = [];
     let undated = 0;
     let invalidEnds = 0;
     let inMonth = 0;
+    let invalidRepeats = 0;
+    let limitedRepeats = 0;
     for (const entry of this.data.data) {
-      const value = entry.getValue(property);
-      const start = value && value.isTruthy() ? (value instanceof DateValue ? value.dateOnly().toString() : value.toString()) : '';
-      const endValue = endProperty ? entry.getValue(endProperty) : null;
-      const end = endValue && endValue.isTruthy() ? (endValue instanceof DateValue ? endValue.dateOnly().toString() : endValue.toString()) : null;
+      const start = this.dateText(entry, property);
+      const end = endProperty ? this.dateText(entry, endProperty) : null;
       const range = dateRange(start, end);
       if (!range) { undated++; continue; }
       if (range.invalidEnd) invalidEnds++;
-      if (range.start <= monthLast && range.end >= monthFirst) inMonth++;
-      if (range.start <= dayKey(days[days.length - 1]) && range.end >= dayKey(days[0])) spans.push({...range, entry});
+      const repeat = repeatProperty ? entry.getValue(repeatProperty)?.toString().trim() ?? '' : '';
+      const rule = repeatRule(repeat);
+      if (repeat && !rule) invalidRepeats++;
+      const projected = rule ? repeatSpans(range, rule, dayKey(days[0]), dayKey(days[days.length - 1])) : { spans: [range], limited: false };
+      if (projected.limited) limitedRepeats++;
+      const startTime = eventTime(start);
+      const endTime = range.invalidEnd ? '' : eventTime(end);
+      const time = startTime && endTime ? `${startTime}–${endTime}` : startTime || (endTime ? `until ${endTime}` : '');
+      for (const occurrence of projected.spans) {
+        if (occurrence.start <= monthLast && occurrence.end >= monthFirst) inMonth++;
+        if (occurrence.start <= dayKey(days[days.length - 1]) && occurrence.end >= dayKey(days[0])) spans.push({...occurrence, entry, time, repeating: !!rule});
+      }
     }
     const weekdayFormat = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
     if (this.infinite) this.weekdays.createDiv({ cls: 'jsc-weekday', attr: { 'aria-hidden': 'true' } });
@@ -552,10 +578,11 @@ class CalendarView extends BasesView implements HoverParent {
         outline.style.gridColumn = `${columnOffset} / span ${weekDays.length}`;
       }
       for (const segment of segments) {
-        const {entry, start, end} = spans[segment.index];
+        const {entry, start, end, time, repeating} = spans[segment.index];
         const titleValue = titleProperty ? entry.getValue(titleProperty) : null;
         this.entries.set(entry.file.path, entry.file);
-        const dates = this.moveDates(entry.file, start, end);
+        // Moving a projected occurrence must not silently reschedule the series.
+        const dates = repeating ? null : this.moveDates(entry.file, start, end);
         if (dates) this.moves.set(entry.file.path, dates);
         const note = week.createDiv({
           cls: 'jsc-note',
@@ -566,7 +593,9 @@ class CalendarView extends BasesView implements HoverParent {
         this.renderTitle(label, titleValue, entry.file);
         if (!label.textContent?.trim()) label.setText(entry.file.basename);
         const title = label.textContent;
-        note.title = `${title} — ${start === end ? start : `${start} through ${end}`}`;
+        if (time && (!this.linear || start !== end)) note.createSpan({ cls: 'jsc-time', text: time });
+        if (repeating) note.addClass('jsc-repeating');
+        note.title = `${title} — ${start === end ? start : `${start} through ${end}`}${time ? ` · ${time}` : ''}${repeating ? ' · Repeats (edit the source note to change the series)' : ''}`;
         note.setAttribute('aria-label', `${note.title}${segment.continuesBefore ? ' (continued)' : ''}`);
         for (const link of note.querySelectorAll<HTMLElement>(TITLE_LINK)) {
           link.draggable = false;
@@ -596,10 +625,12 @@ class CalendarView extends BasesView implements HoverParent {
       }
     }
     const count = this.infinite ? spans.length : inMonth;
-    const parts = [this.config.getDisplayName(property), `${count} ${count === 1 ? 'note' : 'notes'} ${this.infinite ? 'in loaded weeks' : this.linear ? 'this year' : 'this month'}`];
+    const parts = [this.config.getDisplayName(property), `${count} ${count === 1 ? 'event' : 'events'} ${this.infinite ? 'in loaded weeks' : this.linear ? 'this year' : 'this month'}`];
     if (endProperty) parts.push(`End: ${this.config.getDisplayName(endProperty)}`);
     if (undated) parts.push(`${undated} without a valid date`);
     if (invalidEnds) parts.push(`${invalidEnds} with an invalid end date (shown on start date)`);
+    if (invalidRepeats) parts.push(`${invalidRepeats} with an unsupported repeat rule (shown once)`);
+    if (limitedRepeats) parts.push(`${limitedRepeats} series limited to 500 occurrences in loaded dates`);
     this.status.setText(parts.join(' · '));
     if (this.infinite && this.viewport.clientHeight > 0) {
       this.weekdays.style.marginRight = `${this.viewport.offsetWidth - this.viewport.clientWidth}px`;

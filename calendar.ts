@@ -1,9 +1,14 @@
-/** Accept only the native palette or opaque three/six-digit hex colors. */
+/** Accept a bounded color grammar; never arbitrary CSS or remote URLs. */
 export function eventColor(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const color = value.trim().toLowerCase();
   if (/^(red|orange|yellow|green|cyan|blue|purple|pink)$/.test(color)) return `var(--color-${color})`;
-  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/.test(color) ? color : null;
+  if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/.test(color)) return color;
+  const rgb = /^(rgb|rgba)\(\s*(\d+(?:\.\d+)?%?)\s*,\s*(\d+(?:\.\d+)?%?)\s*,\s*(\d+(?:\.\d+)?%?)(?:\s*,\s*((?:\d+(?:\.\d+)?|\.\d+)%?))?\s*\)$/.exec(color);
+  if (!rgb || (rgb[1] === 'rgba') !== !!rgb[5]) return null;
+  if (rgb.slice(2, 5).some(channel => parseFloat(channel) > (channel.endsWith('%') ? 100 : 255))) return null;
+  if (rgb[5] && parseFloat(rgb[5]) > (rgb[5].endsWith('%') ? 100 : 1)) return null;
+  return color;
 }
 
 /** Calendar dates stay local: a YYYY-MM-DD must never shift through UTC. */
@@ -20,7 +25,7 @@ export function dayKey(date: Date): string {
 
 /** ISO date strings and datetimes use their written calendar day. */
 export function parseDay(value: string): string | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:$|T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)?$)/.exec(value.trim());
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T ](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)?$)/.exec(value.trim());
   if (!match) return null;
   const [, y, m, d] = match;
   const date = localDate(Number(y), Number(m) - 1, Number(d));
@@ -96,6 +101,63 @@ export function resizedEnd(start: string, end: unknown, to: string): string | nu
 }
 
 export interface CalendarSpan { start: string; end: string }
+
+export function eventTime(value: string | null): string {
+  return value && parseDay(value) ? value.trim().slice(11, 16) : '';
+}
+
+export type RepeatRule = { unit: 'day' | 'week' | 'month' | 'year'; interval: number };
+
+/** Deliberately bounded grammar, shared by note properties and the documentation. */
+export function repeatRule(value: string): RepeatRule | null {
+  const text = value.trim().toLowerCase();
+  const compact = /^([dwmy])([1-9]\d{0,3})?$/.exec(text);
+  if (compact) return { unit: ({ d: 'day', w: 'week', m: 'month', y: 'year' } as const)[compact[1] as 'd' | 'w' | 'm' | 'y'], interval: Number(compact[2] ?? 1) };
+  const words = /^every (?:(second|third|fourth|[1-9]\d{0,3}) )?(day|week|month|year)s?$/.exec(text);
+  if (words) return { unit: words[2] as RepeatRule['unit'], interval: Number(({ second: 2, third: 3, fourth: 4 } as Record<string, number>)[words[1]] ?? words[1] ?? 1) };
+  const single = /^(daily|weekly|monthly|yearly)$/.exec(text);
+  return single ? { unit: ({ daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' } as const)[single[1] as 'daily' | 'weekly' | 'monthly' | 'yearly'], interval: 1 } : null;
+}
+
+function serialDay(key: string): number {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(0);
+  date.setUTCFullYear(y, m - 1, d);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.getTime() / 86400000;
+}
+
+/** Project occurrences into the loaded window; never create or modify notes.
+ * Month/year repeats clamp to that month's last day, always from the original
+ * anchor (Jan 31 -> Feb 28 -> Mar 31). The duration is in local calendar days.
+ */
+export function repeatSpans(span: CalendarSpan, rule: RepeatRule, first: string, last: string): { spans: CalendarSpan[]; limited: boolean } {
+  if (!parseDay(span.start) || !parseDay(span.end) || !parseDay(first) || !parseDay(last) || span.end < span.start || last < first || !Number.isInteger(rule.interval) || rule.interval < 1) return { spans: [], limited: false };
+  const duration = serialDay(span.end) - serialDay(span.start);
+  const [y, m, d] = span.start.split('-').map(Number);
+  const earliest = addDays(localDate(y, m - 1, d), serialDay(first) - duration - serialDay(span.start));
+  const step = rule.interval * (rule.unit === 'week' ? 7 : 1);
+  let index = Math.max(0, Math.floor(rule.unit === 'day' || rule.unit === 'week'
+    ? (serialDay(first) - duration - serialDay(span.start)) / step
+    : rule.unit === 'month' ? ((earliest.getFullYear() - y) * 12 + earliest.getMonth() - m + 1) / step
+    : (earliest.getFullYear() - y) / step) - 1);
+  const spans: CalendarSpan[] = [];
+  for (;; index++) {
+    const date = rule.unit === 'day' || rule.unit === 'week' ? addDays(localDate(y, m - 1, d), index * step)
+      : (() => {
+        const month = localDate(y + (rule.unit === 'year' ? index * step : 0), m - 1 + (rule.unit === 'month' ? index * step : 0), 1);
+        return localDate(month.getFullYear(), month.getMonth(), Math.min(d, localDate(month.getFullYear(), month.getMonth() + 1, 0).getDate()));
+      })();
+    const start = dayKey(date);
+    if (!parseDay(start) || start > last) break;
+    const end = dayKey(addDays(date, duration));
+    if (!parseDay(end)) break;
+    if (end < first) continue;
+    if (spans.length === 500) return { spans, limited: true };
+    spans.push({ start, end });
+  }
+  return { spans, limited: false };
+}
 export interface WeekSegment {
   index: number;
   column: number;
