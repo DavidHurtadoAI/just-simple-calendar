@@ -1,5 +1,20 @@
 # Validation
 
+## 1.6.0 - Agenda and optional schedules - 2026-11-02
+
+Verified in the canonical `@Nexus-dev` vault using Windows desktop Obsidian 1.15.0.
+
+- `npm run check` passes official lint with zero warnings, strict TypeScript, 36 unit tests, the production build and release audit. The complete JavaScript remains below 40 KiB with zero runtime package dependencies or network calls.
+- The central installer installs the build and `verify just-simple-calendar` confirms matching artifacts, keeping previous files in `.dev-backups/`.
+- `node scripts/qa-scheduling.mjs` passes 16 live scenarios through Obsidian's CLI and actual Bases/DOM/Modal APIs. It guards the exact canonical vault path, creates additive Spanish QA fixtures only under `Pruebas/Just Simple Calendar/`, restores the fixture note bytes and returns to the original tab/window bounds.
+- Coverage includes day/week navigation and native date input, full titles, recurrence end/exclusions, deduplication and distinct-note totals; absence of advanced actions when unconfigured; cancellation, empty-row validation and preservation of the main date/time, unrelated properties and Markdown body; refusal of concurrent schedule/mapping edits; retention of unrelated concurrent body changes; mapping-collision and malformed-value explanations; projection across all four real Base views; narrow-pane layout and action sizes; actual DOM drag/drop in the monthly view; and closing an unsaved date editor with its Base.
+- Native screenshots at 360 and 800 CSS pixels were inspected. The 360 px agenda has no horizontal overflow and retains full titles, times, explicit creation and three-dot actions. The optional date editor uses native date inputs and explicit Save/Cancel.
+- The maintainer capture script only uses the fictional fixtures from that QA run and restores the previous tab. Screenshots in the README are real application captures.
+- Release screenshots also show the actual native Configure view panel with Optional scheduling expanded, the original note's Properties editor beside the calendar, and the Repeat options/additional-date dialogs. Their dates were selected and saved through those dialogs: the weekly meeting appears on November 2, 9 and 23 (skipping November 16, ending November 23), and the course appears on November 4, 12 and 20. The projected dates were asserted against the real rendered calendar before capturing it.
+- `scripts/capture-release.mjs` guards the canonical vault, creates additive fictional fixtures under `Pruebas/Just Simple Calendar/`, and restores the original panes, sidebar visibility, window bounds/maximization and background throttling in its cleanup step. It captures actual application pixels, without compositing or annotations.
+
+These are automated in-app checks with DOM events plus visual inspection of desktop captures. No physical phone/tablet, touch drag, exhaustive theme matrix or large-vault benchmark is claimed. Advanced lists are deliberately bounded to 128 values and projected repeats to 500 occurrences.
+
 ## 1.4.1 - Linear Calendar container styling
 
 Verified in the Windows development vault on September 29, 2026:

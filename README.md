@@ -2,7 +2,7 @@
 
 **The purpose is to make a calendar as lightweight and simple as possible, with no external libraries and no dependency on other community plugins.** That is why Just Simple Calendar exists: a small, focused way to see your notes on a calendar, using the features already built into Obsidian.
 
-It adds **three calendar view types to Bases**. Your notes remain ordinary Markdown files, your dates remain ordinary properties, and your Base keeps control of filtering and sorting. There is no separate event database, calendar framework, React runtime, account, or remote service.
+It adds **four calendar view types to Bases**, including a day/week agenda. Your notes remain ordinary Markdown files, your dates remain ordinary properties, and your Base keeps control of filtering and sorting. There is no separate event database, calendar framework, React runtime, account, or remote service.
 
 ![A month of single-day events and continuous multi-day bars in Obsidian](docs/images/calendar-overview.png)
 
@@ -11,6 +11,7 @@ It adds **three calendar view types to Bases**. Your notes remain ordinary Markd
 - Monthly calendar with **Previous year**, **Previous month**, **Today**, **Next month**, and **Next year**.
 - A second **Infinite Calendar** view: scroll up into the past or down into the future through a continuous stream of weeks.
 - A **Linear Calendar** view: a whole year with one month per row and aligned weekdays.
+- A **Simple Agenda** view: complete note titles, optional times and accessible actions in a single column, showing one day or one week.
 - A selectable start date and an optional, inclusive end date.
 - An optional title property instead of the file name, with automatic fallback for missing or blank values.
 - An optional color property: eight native color names or a custom hex color.
@@ -23,7 +24,7 @@ It adds **three calendar view types to Bases**. Your notes remain ordinary Markd
 - Create a blank note from an empty day with its date already filled in.
 - Monday or Sunday week start, keyboard support, and styling that follows your theme.
 
-The JavaScript is less than **28 KiB uncompressed**. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
+The JavaScript is less than **40 KiB uncompressed**, including the agenda and optional date-picker editors. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
 
 ## Install
 
@@ -36,7 +37,7 @@ Requires **Obsidian 1.10.2 or later**, with the built-in **Bases** feature enabl
 ## Set up a calendar
 
 1. Create or open a Base.
-2. Open its view settings and choose **Simple Calendar** for a month, **Infinite Calendar** for continuous weeks, or **Linear Calendar** for a year.
+2. Open its view settings and choose **Simple Calendar** for a month, **Infinite Calendar** for continuous weeks, **Linear Calendar** for a year, or **Simple Agenda** for a day/week list.
 3. Set **Date property** to your start date property, such as `start_date`.
 4. Optionally set **End date property (optional)** to `end_date`.
 5. Optionally set **Title property (optional)** to the property you want to display, such as `title`.
@@ -103,6 +104,18 @@ The start and end days are **both included**. September 21 through September 25 
 - Invalid or missing start date: the note is counted below the calendar but is not placed on a day.
 
 Month totals count **distinct notes**, not the number of occupied days. Ranges are clipped to the visible weeks, so a long-running note does not generate off-screen calendar cells.
+
+## Simple Agenda
+
+Choose **Simple Agenda** in the Base's view settings. Use **Day / Week**, the previous/next buttons, **Today** or the native date picker. The selected period is saved in this Base view. Week boundaries follow your Monday/Sunday setting.
+
+![Simple Agenda at 360 CSS pixels, with complete titles, times and accessible note actions](docs/images/agenda-mobile.png)
+
+Each day has its own **+** button to create a dated note. Click or tap a note to open it; use its **three-dot button** for opening options, deletion and any optional schedule editors enabled in this view. Keyboard opening and native hover previews also work. Empty days stay visible so you can plan them.
+
+All-day notes appear before timed notes; notes with the same start time retain the Base's order. A multi-day note appears on each occupied day, with its full date range. Repeated and additional-date appearances identify that they open the same note. No note is duplicated. The footer counts distinct notes and, when different, occurrences.
+
+The agenda uses a single column at every width and wraps full titles. It does not add an hourly grid or drag gestures. Use the note's normal Properties editor to change its main date; the existing calendar views keep their desktop drag/resize controls. This screenshot is from desktop Obsidian in a narrow pane, not a physical phone.
 
 ## Infinite Calendar
 
@@ -205,14 +218,93 @@ The plugin uses web and Obsidian APIs compatible with desktop and mobile. Physic
 
 This is an independent plugin, not an official Obsidian product.
 
-## License
+## Optional scheduling
 
-[MIT](LICENSE). Copyright 2026 David Hurtado.
+Ordinary notes need only their existing main date. **Optional scheduling** is a collapsible group in each Base view's settings. Leaving its property selectors unset adds no schedule actions or requirements. Property names are yours to choose; the examples below are suggestions. Use different properties for the main date, end date and each optional scheduling field. A conflicting mapping is reported and the optional fields are ignored.
 
-### Times, repeats and visibility
+> **Advanced feature:** repeating schedules, recurrence limits and additional dates are intended for users who are comfortable with Obsidian properties and YAML frontmatter, including Text, Date/Datetime and List property types. These options are not needed for an ordinary calendar. Configure the properties once in each Base view; the optional date editors help with individual dates after that setup.
 
-Select an optional **Repeat property** in the Base view settings. Values include `d`, `w2`, `m3`, `y`, `daily`, `weekly`, `monthly`, `yearly`, `every week`, `every second month` or `every 3 days`. Occurrences open the original note; no files are duplicated. Durations and written times are preserved. Monthly/yearly repeats clamp to the last day using the original anchor (Jan 31 → Feb 28 → Mar 31). Combined rules such as `m3d4`, exceptions and recurrence end dates are unsupported; invalid rules show the original event once with a status warning.
+![The native Configure view panel with Optional scheduling expanded and the schedule properties selected](docs/images/optional-scheduling-settings.png)
+
+### Repeating notes
+
+There are two separate choices:
+
+1. **In the note**, add a **Text** property such as `repeat` and give it a value such as `every week`.
+2. **In the Base view**, expand **Optional scheduling** and select `repeat` as **Repeat property**. This selects the **property name**, not the frequency. Each note supplies its own frequency through that property's value.
+
+The main date is the first occurrence and its anchor. A Monday main date with `every week` repeats on Mondays. Every occurrence opens the original note; no files are duplicated. Durations and written times are preserved.
+
+![Calendar configuration on the left and the original note's native properties on the right, showing repeat set to every week](docs/images/scheduling-properties-and-calendar.png)
+
+**`weekly` and `every week` are equivalent.** The plugin recognizes a small, explicit English grammar, case-insensitively, with these aliases:
+
+| Frequency | Word form | Equivalent phrase | Compact form |
+| --- | --- | --- | --- |
+| Every day | `daily` | `every day` | `d` |
+| Every week | `weekly` | `every week` | `w` |
+| Every month | `monthly` | `every month` | `m` |
+| Every year | `yearly` | `every year` | `y` |
+
+For intervals, use a positive whole number from 1 to 9999: `every 3 days`, `every 2 weeks`, `every 3 months` or `every 2 years`. Compact equivalents are `d3`, `w2`, `m3` and `y2`. The words `second`, `third` and `fourth` are also accepted: `every second week` equals `w2`, and `every third month` equals `m3`.
+
+This is a defined set of patterns, not unrestricted natural-language interpretation. Other languages and combined rules such as `m3d4` are unsupported. An invalid rule shows the source event once with a status warning. Monthly/yearly repeats clamp to the last day using the original anchor (Jan 31 → Feb 28 → Mar 31).
+
+**There is no frequency dropdown in this version.** You enter the repeat value in the note's Properties editor or frontmatter. The date pickers described below edit the final date, skipped days and additional days; they do not select the frequency.
+
+To finish or skip dates, create optional **Date** and **List** properties in Obsidian's native Properties editor, then select them as **Repeat until property** and **Skipped dates property**. These selectors appear only after a Repeat property is selected. From a repeating note's context menu, or its agenda three-dot button, choose **Repeat options…** to use date pickers. Only the configured fields are shown; Cancel writes nothing.
+
+```yaml
+---
+start_date: 2026-11-02 10:00
+end_date: 2026-11-02 11:00
+repeat: every week
+repeat_until: 2026-11-23
+skip_dates:
+  - 2026-11-16
+---
+```
+
+![Choosing the inclusive final date and the skipped occurrence in the native Repeat options editor](docs/images/repeat-options.png)
+
+Save these options to show the meeting on **November 2, 9 and 23**: November 16 is skipped, and the series stops after November 23. Its one-hour duration stays the same.
+
+![The resulting monthly calendar, showing the bounded weekly meeting and the course's additional dates](docs/images/scheduled-calendar.png)
+
+The final date is inclusive and applies to an occurrence's **start**, as do skipped dates. An occurrence can finish after that final date if it lasts several days. Skipping one occurrence never shifts later ones. Clear the end field to keep repeating; remove skipped rows to restore those occurrences. Limits do not affect ordinary, non-repeating notes. Invalid limits show the source event once with a warning rather than projecting an accidentally unbounded series. Repair malformed stored dates in the note before using the editor.
 
 Projection is restricted to loaded dates and capped at 500 occurrences per note. A status warning reports the limit. Recurring bars cannot be dragged or resized: edit the source note to change the series.
 
+### Additional dates for one note
+
+For a course with irregular sessions, keep its normal main date and add individual days. This is opt-in and applies only to **single-day notes without repetition**.
+
+1. Add a **List** property, for example `additional_dates`, to a note using Obsidian's native Properties editor.
+2. Select it as **Additional dates property** under **Optional scheduling** in the Base view.
+3. Use the note's **Additional dates…** menu action to add or remove days with native date pickers, then Save. You do not need to write a date-list syntax.
+
+![The optional date editor with the unchanged main date and two native date-picker rows](docs/images/additional-dates.png)
+
+```yaml
+---
+start_date: 2026-11-04 18:00
+end_date: 2026-11-04 20:00
+additional_dates:
+  - 2026-11-12
+  - 2026-11-20
+---
+```
+
+The course appears on November 4, 12 and 20, from 18:00 to 20:00, as in the calendar above. Every appearance opens **the same file**. Notes with no additional dates work as usual. The main date remains an ordinary Date/Datetime property; no scalar date is converted into a list. Duplicate days, including the main day, appear only once. The editor sorts and deduplicates saved days, retaining the main date and unrelated note properties/body. A one-value date property is also accepted as an additional day.
+
+Additional days reuse the main event's written times, when present. They do not extend a multi-day range, combine with a repeat rule or inherit repeat limits. If such a combination is entered manually, the original range/series is retained and a warning explains why the additional dates were ignored. All appearances of an additional-date note stay non-draggable to avoid ambiguous changes to the main date or the complete schedule; use the date editor or the original note.
+
+Date lists use `YYYY-MM-DD`, with up to 128 stored values. Native date pickers display your device's local format and save ISO days. Ambiguous strings such as `02/11/2026` are not guessed. Malformed or oversized stored lists are reported and cannot be silently rewritten by the date editor. If the schedule, note path or selected properties change while an editor is open, saving is refused and the draft stays available for review.
+
+Base filters still decide which notes are supplied. For example, a filter on the main date can exclude a note even if one of its additional/repeated dates falls in the visible period. Use a suitable folder/tag filter when you want the complete schedule of those notes.
+
 Optional times such as `2026-09-21 15:00` and `2026-09-21 18:00` appear beside the title. Date-only events remain all-day. **Show status** and **Show help** independently hide the footers and default to enabled.
+
+## License
+
+[MIT](LICENSE). Copyright 2026 David Hurtado.

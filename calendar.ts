@@ -131,7 +131,7 @@ function serialDay(key: string): number {
  * Month/year repeats clamp to that month's last day, always from the original
  * anchor (Jan 31 -> Feb 28 -> Mar 31). The duration is in local calendar days.
  */
-export function repeatSpans(span: CalendarSpan, rule: RepeatRule, first: string, last: string): { spans: CalendarSpan[]; limited: boolean } {
+export function repeatSpans(span: CalendarSpan, rule: RepeatRule, first: string, last: string, until?: string, except: ReadonlySet<string> = new Set()): { spans: CalendarSpan[]; limited: boolean } {
   if (!parseDay(span.start) || !parseDay(span.end) || !parseDay(first) || !parseDay(last) || span.end < span.start || last < first || !Number.isInteger(rule.interval) || rule.interval < 1) return { spans: [], limited: false };
   const duration = serialDay(span.end) - serialDay(span.start);
   const [y, m, d] = span.start.split('-').map(Number);
@@ -149,14 +149,86 @@ export function repeatSpans(span: CalendarSpan, rule: RepeatRule, first: string,
         return localDate(month.getFullYear(), month.getMonth(), Math.min(d, localDate(month.getFullYear(), month.getMonth() + 1, 0).getDate()));
       })();
     const start = dayKey(date);
-    if (!parseDay(start) || start > last) break;
+    if (!parseDay(start) || start > last || (until && start > until)) break;
     const end = dayKey(addDays(date, duration));
     if (!parseDay(end)) break;
-    if (end < first) continue;
+    if (end < first || except.has(start)) continue;
     if (spans.length === 500) return { spans, limited: true };
     spans.push({ start, end });
   }
   return { spans, limited: false };
+}
+
+export const DATE_LIST_LIMIT = 128;
+
+/** A list always means individual ISO calendar days, never a range or a rule. */
+export function dateList(value: unknown): { days: string[]; invalid: number; limited: boolean } {
+  if (value === undefined || value === null || value === '') return { days: [], invalid: 0, limited: false };
+  const values = Array.isArray(value) ? value : [value];
+  const days = new Set<string>();
+  let invalid = 0;
+  for (const item of values.slice(0, DATE_LIST_LIMIT)) {
+    if (typeof item === 'string' && parseDay(item) === item.trim()) days.add(item.trim());
+    else invalid++;
+  }
+  return { days: [...days].sort(), invalid, limited: values.length > DATE_LIST_LIMIT };
+}
+
+export interface ScheduleOptions { until?: unknown; except?: unknown; additional?: unknown }
+export interface ScheduleProjection {
+  spans: CalendarSpan[];
+  kind: 'single' | 'repeat' | 'additional';
+  invalidEnd: boolean;
+  warnings: string[];
+  limited: boolean;
+}
+
+/** Keep the three schedules unambiguous: one event, a series, or individual days.
+ * Limits apply to occurrence START dates. Invalid bounds never create an
+ * accidentally unbounded series; the source event stays visible for repair.
+ */
+export function projectSchedule(start: string, end: string | null, repeat: string, first: string, last: string, options: ScheduleOptions = {}): ScheduleProjection | null {
+  const range = dateRange(start, end);
+  if (!range) return null;
+  const warnings: string[] = [];
+  const extra = dateList(options.additional);
+  if (extra.invalid) warnings.push('Invalid additional dates (use YYYY-MM-DD)');
+  if (extra.limited) warnings.push('Additional dates limited to 128 values');
+  const rule = repeatRule(repeat);
+  let spans: CalendarSpan[] = [range];
+  let kind: ScheduleProjection['kind'] = 'single';
+  let limited = false;
+  if (repeat && !rule) warnings.push('Unsupported repeat rule (shown once)');
+  if (rule) {
+    const until = options.until;
+    const hasUntil = until !== undefined && until !== null && until !== '';
+    const validUntil = typeof until === 'string' && parseDay(until) === until.trim() && until.trim() >= range.start;
+    const except = dateList(options.except);
+    if (except.invalid) warnings.push('Invalid skipped dates (use YYYY-MM-DD)');
+    if (except.limited) warnings.push('Skipped dates limited to 128 values');
+    // A malformed exclusion could silently show a cancelled meeting. Fail closed.
+    if (hasUntil && !validUntil || except.invalid || except.limited) {
+      warnings.push('Invalid repeat limits (source event shown once)');
+    } else {
+      const projected = repeatSpans(range, rule, first, last, validUntil ? until.trim() : undefined, new Set(except.days));
+      spans = projected.spans;
+      limited = projected.limited;
+      kind = 'repeat';
+    }
+  }
+  if (extra.days.length) {
+    if (repeat || range.start !== range.end || range.invalidEnd) {
+      warnings.push('Additional dates need a single-day note without repetition');
+    } else {
+      spans = [...new Set([range.start, ...extra.days])].sort().map(day => ({ start: day, end: day }));
+      kind = spans.length > 1 ? 'additional' : 'single';
+    }
+  }
+  return { spans: spans.filter(span => span.start <= last && span.end >= first), kind, invalidEnd: range.invalidEnd, warnings, limited };
+}
+
+export function agendaDays(day: Date, weekStart: number, range: 'day' | 'week'): Date[] {
+  return range === 'day' ? [localDate(day.getFullYear(), day.getMonth(), day.getDate())] : weekWindow(startOfWeek(day, weekStart), 1);
 }
 export interface WeekSegment {
   index: number;

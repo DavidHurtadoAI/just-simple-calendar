@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["main.ts", "calendar.ts"]
+  "include": ["main.ts", "calendar.ts", "schedule-modal.ts"]
 }

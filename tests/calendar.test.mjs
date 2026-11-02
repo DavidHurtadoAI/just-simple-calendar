@@ -1,6 +1,76 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addDays, dateRange, dayKey, eventColor, eventTime, layoutDays, layoutWeek, localDate, monthDays, parseDay, repeatRule, repeatSpans, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
+import { addDays, agendaDays, dateList, dateRange, dayKey, eventColor, eventTime, layoutDays, layoutWeek, localDate, monthDays, parseDay, projectSchedule, repeatRule, repeatSpans, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from '../calendar.ts';
+
+test('additional days are explicit ISO dates, deduplicated, sorted and bounded', () => {
+  assert.deepEqual(dateList(['2026-11-09',' 2026-11-02 ','2026-11-09','02/11/2026','2026-02-30','2026-11-03T10:00',3]), {days:['2026-11-02','2026-11-09'],invalid:4,limited:false});
+  for (const value of [undefined,null,'',[]]) assert.deepEqual(dateList(value), {days:[],invalid:0,limited:false});
+  assert.deepEqual(dateList('2026-11-02').days,['2026-11-02']);
+  assert.equal(dateList(Array(129).fill('2026-11-02')).limited,true);
+});
+
+test('additional dates keep the main event and never create duplicate occurrences', () => {
+  const result=projectSchedule('2026-11-02 10:00','2026-11-02 12:00','','2026-11-01','2026-11-30',{additional:['2026-11-09','2026-11-02','2026-11-09','2026-12-07']});
+  assert.deepEqual(result.spans.map(span=>span.start),['2026-11-02','2026-11-09']);
+  assert.ok(result.spans.every(span=>span.start===span.end));
+  assert.equal(result.kind,'additional');
+  assert.deepEqual(result.warnings,[]);
+});
+
+test('adding dates does not change a multi-day event, invalid range or repeat series', () => {
+  for(const [start,end,repeat] of [['2026-11-02','2026-11-04',''],['2026-11-02','bad',''],['2026-11-02',null,'weekly'],['2026-11-02',null,'invalid']]){
+    const plain=projectSchedule(start,end,repeat,'2026-11-01','2026-11-30');
+    const mixed=projectSchedule(start,end,repeat,'2026-11-01','2026-11-30',{additional:['2026-11-20']});
+    assert.deepEqual(mixed.spans,plain.spans);
+    assert.ok(mixed.warnings.includes('Additional dates need a single-day note without repetition'));
+  }
+});
+
+test('repeat end is inclusive and uses original month-end and leap-year anchors', () => {
+  const monthly=projectSchedule('2026-01-31',null,'monthly','2026-01-01','2026-12-31',{until:'2026-03-31'});
+  assert.deepEqual(monthly.spans.map(span=>span.start),['2026-01-31','2026-02-28','2026-03-31']);
+  const yearly=projectSchedule('2024-02-29',null,'yearly','2025-01-01','2030-12-31',{until:'2028-02-29'});
+  assert.deepEqual(yearly.spans.map(span=>span.start),['2025-02-28','2026-02-28','2027-02-28','2028-02-29']);
+  assert.equal(monthly.kind,'repeat');
+});
+
+test('skipped dates omit occurrences by their start without changing duration or later anchors', () => {
+  const result=projectSchedule('2026-01-31','2026-02-02','monthly','2026-01-01','2026-04-30',{except:['2026-02-28'],until:'2026-03-31'});
+  assert.deepEqual(result.spans,[{start:'2026-01-31',end:'2026-02-02'},{start:'2026-03-31',end:'2026-04-02'}]);
+  const overlapping=projectSchedule('2026-11-02','2026-11-05','daily','2026-11-04','2026-11-06',{until:'2026-11-03',except:['2026-11-02']});
+  assert.deepEqual(overlapping.spans,[{start:'2026-11-03',end:'2026-11-06'}]);
+});
+
+test('malformed repeat limits show the source once rather than an unbounded or incorrect series', () => {
+  for(const options of [{until:'bad'},{until:'2026-02-30'},{until:'2026-11-01'},{until:3},{except:['2026-11-09','bad']},{except:Array(129).fill('2026-11-09')}]){
+    const result=projectSchedule('2026-11-02',null,'weekly','2026-11-01','2026-11-30',options);
+    assert.deepEqual(result.spans.map(span=>span.start),['2026-11-02']);
+    assert.ok(result.warnings.includes('Invalid repeat limits (source event shown once)'));
+  }
+});
+
+test('finished and excluded series stay empty and no optional fields affect ordinary notes', () => {
+  assert.deepEqual(projectSchedule('2026-01-01',null,'daily','2026-11-01','2026-11-30',{until:'2026-01-31'}).spans,[]);
+  assert.deepEqual(projectSchedule('2026-11-02',null,'weekly','2026-11-02','2026-11-02',{except:['2026-11-02']}).spans,[]);
+  const result=projectSchedule('2026-11-02',null,'','2026-11-01','2026-11-30',{until:'2026-01-01',except:['2026-11-02']});
+  assert.deepEqual(result.spans.map(span=>span.start),['2026-11-02']);
+  assert.equal(result.kind,'single');
+});
+
+test('agenda days cross months, years and DST with either week start', () => {
+  for(const tz of ['Europe/Madrid','America/New_York','UTC']){
+    process.env.TZ=tz;
+    for(const day of [localDate(2026,2,29),localDate(2026,9,25),localDate(2027,0,1)]){
+      assert.deepEqual(agendaDays(day,1,'day').map(dayKey),[dayKey(day)]);
+      for(const weekStart of [0,1]){
+        const days=agendaDays(day,weekStart,'week');
+        assert.equal(days.length,7);assert.equal(days[0].getDay(),weekStart);
+        assert.equal(new Set(days.map(dayKey)).size,7);assert.ok(days.some(date=>dayKey(date)===dayKey(day)));
+      }
+    }
+  }
+  delete process.env.TZ;
+});
 
 test('space and ISO timestamps display time, retain offsets on moves and reject malformed dates', () => {
   for (const separator of [' ', 'T']) {

@@ -2,7 +2,7 @@
   --jsc-border: var(--background-modifier-border);
   height: 100%;
   overflow: auto;
-  padding: 16px;
+  padding: 16px 16px 8px;
   container-type: inline-size;
 }
 .jsc-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
@@ -44,6 +44,10 @@
 .jsc-status[hidden], .jsc-help[hidden] { display: none; }
 .jsc-unconfigured .jsc-grid, .jsc-unconfigured .jsc-help { display: none; }
 .jsc-unconfigured .jsc-status { padding: 32px 16px; text-align: center; border: 1px dashed var(--jsc-border); border-radius: 8px; }
+.bases-view.jsc-month-container, .bases-view.jsc-infinite-container { padding-bottom: 0; }
+.jsc-month-container > .jsc-calendar { display: flex; flex-direction: column; }
+.jsc-month-container .jsc-toolbar, .jsc-month-container .jsc-status, .jsc-month-container .jsc-help { flex-shrink: 0; }
+.jsc-month-container .jsc-grid { flex: 1 0 auto; grid-template-rows: max-content; }
 .jsc-infinite { display: flex; flex-direction: column; overflow: hidden; }
 .jsc-infinite .jsc-toolbar, .jsc-infinite .jsc-status, .jsc-infinite .jsc-help { flex-shrink: 0; }
 .jsc-weekdays { display: grid; grid-template-columns: 28px repeat(7, minmax(0, 1fr)); flex-shrink: 0; border-top: 1px solid var(--jsc-border); border-left: 1px solid var(--jsc-border); }
@@ -81,3 +85,30 @@
 .jsc-linear .jsc-continues-before::before { left: 2px; }
 .jsc-linear .jsc-continues-after::after { right: 2px; }
 .jsc-linear.jsc-unconfigured .jsc-viewport { display: none; }
+
+/* Agenda keeps complete titles and touch actions in a single, narrow column. */
+.jsc-agenda .jsc-navigation { flex-wrap: wrap; }
+.jsc-agenda .jsc-navigation select, .jsc-agenda .jsc-navigation button { min-height: 36px; }
+.jsc-agenda .jsc-navigation input[type="date"] { min-height: 36px; max-width: 160px; }
+.jsc-agenda .jsc-grid { display: block; border: 0; overflow: visible; }
+.jsc-agenda .jsc-agenda-day { padding: 0 0 12px; border: 0; border-bottom: 1px solid var(--jsc-border); margin-bottom: 12px; }
+.jsc-agenda-heading { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.jsc-agenda-heading h4 { margin: 8px 0; font-size: var(--font-ui-medium); overflow-wrap: anywhere; }
+.jsc-agenda .jsc-today .jsc-agenda-heading h4 { color: var(--interactive-accent); }
+.jsc-agenda-heading button, .jsc-agenda .jsc-note-menu { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; padding: 8px; flex-shrink: 0; }
+.jsc-agenda .jsc-note { min-height: 48px; margin: 6px 0; padding: 10px 48px 10px 12px; white-space: normal; font-size: var(--font-ui-medium); line-height: 1.45; overflow-wrap: anywhere; }
+.jsc-agenda .jsc-title { display: block; }
+.jsc-agenda .jsc-time { display: block; padding: 2px 0 0; color: var(--text-muted); }
+.jsc-agenda .jsc-note-menu { position: absolute; right: 3px; top: 3px; box-shadow: none; }
+.jsc-schedule-label, .jsc-agenda-empty, .jsc-empty-dates { display: block; color: var(--text-muted); font-size: var(--font-ui-small); }
+.jsc-agenda-empty { margin: 4px 0; padding: 4px 0; }
+.jsc-schedule-warning { border-left-color: var(--color-orange); }
+.jsc-schedule-editor .jsc-date-list { max-height: 40vh; overflow-y: auto; }
+.jsc-date-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.jsc-date-row input { flex: 1; min-width: 0; min-height: 40px; }
+.jsc-date-row button { min-height: 40px; }
+.jsc-schedule-error { color: var(--text-error); }
+@container (max-width: 520px) {
+  .jsc-agenda .jsc-navigation { width: 100%; margin-left: 0; }
+  .jsc-agenda .jsc-navigation input[type="date"] { flex: 1; min-width: 125px; }
+}
