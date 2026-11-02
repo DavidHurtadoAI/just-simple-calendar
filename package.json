@@ -1,6 +1,6 @@
 {
   "name": "just-simple-calendar",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "A deliberately lightweight, dependency-free calendar view for Obsidian Bases.",
   "author": "David Hurtado",
@@ -16,7 +16,7 @@
   "scripts": {
     "build": "esbuild main.ts --bundle --platform=browser --format=cjs --target=es2020 --external:obsidian --minify --outfile=main.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint main.ts calendar.ts --max-warnings 0",
+    "lint": "eslint main.ts calendar.ts schedule-modal.ts --max-warnings 0",
     "test": "node --experimental-strip-types --test tests/calendar.test.mjs",
     "audit:release": "node scripts/audit-release.mjs",
     "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run audit:release"

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0
+
+- Add Simple Agenda, a single-column day/week Base view with full titles, times, date navigation, empty days, explicit creation/actions and touch-sized controls.
+- Add optional recurrence end and skipped-date properties. Apply both to occurrence starts without changing duration, written times or month/year anchors.
+- Add opt-in additional dates for a single-day, non-repeating note. Keep the main date scalar, show the same note on each extra day and deduplicate occurrences.
+- Keep optional properties in one collapsible scheduling group; hide recurrence-limit selectors until repetition is configured. Provide native date-picker editors with cancellation, validation and stale-write protection.
+- Report malformed or incompatible schedules and mapping collisions. Preserve the original range/series when additional dates cannot apply; never silently combine scheduling modes.
+- Count distinct notes separately from occurrences. Keep all four views local, dependency-free and below a 40 KiB JavaScript budget.
+- Document the advanced frontmatter workflow, frequency aliases and exact date-picker scope, with real Obsidian screenshots of configuration, date selection and resulting occurrences.
+
+Validated with lint, strict TypeScript, 36 unit tests, release audit, central installation/verification and 16 live Obsidian scenarios. Screenshots use fictional notes in the canonical development vault; no physical mobile device test is claimed.
+
 ## 1.5.0
 
 - Display optional start and end times from ISO or space-separated timestamps while keeping date-only events all-day.

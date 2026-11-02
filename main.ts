@@ -1,32 +1,40 @@
 import {
-  BasesView, DateValue, Keymap, LinkValue, ListValue, Menu, Notice, NullValue, Platform, Plugin, StringValue, parseLinktext, parsePropertyId, setIcon,
+  BasesView, DateValue, Keymap, LinkValue, ListValue, Menu, Notice, NullValue, Platform, Plugin, StringValue, getFrontMatterInfo, parseYaml, parseLinktext, parsePropertyId, setIcon,
   type BasesAllOptions, type BasesEntry, type HoverParent, type HoverPopover, type QueryController,
   type TFile, type Value, type WorkspaceLeaf,
 } from 'obsidian';
-import { addDays, dateRange, dayKey, eventColor, eventTime, layoutDays, localDate, monthDays, parseDay, repeatRule, repeatSpans, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths } from './calendar';
+import { addDays, agendaDays, dayKey, eventColor, eventTime, layoutDays, localDate, monthDays, parseDay, projectSchedule, repeatRule, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths, type ScheduleProjection } from './calendar';
+import { ScheduleModal } from './schedule-modal';
 
 const VIEW_TYPE = 'just-simple-calendar';
 const INFINITE_VIEW_TYPE = 'just-simple-calendar-infinite';
 const LINEAR_VIEW_TYPE = 'just-simple-calendar-linear';
+const AGENDA_VIEW_TYPE = 'just-simple-calendar-agenda';
 type ScrollAnchor = { day: string; offset: number };
 type OpenMode = 'current' | 'tab' | 'right';
 type MoveDates = { file: TFile; startProperty: string; endProperty: string | null; start: string; end: unknown };
+type EventSpan = { start: string; end: string; entry: BasesEntry; time: string; kind: ScheduleProjection['kind']; warnings: string[]; movable: boolean };
 const DRAG_TYPE = 'application/x-just-simple-calendar';
 const TITLE_LINK = '.jsc-title :is(a, .internal-link, .external-link)';
 
 export default class JustSimpleCalendar extends Plugin {
   onload(): void {
     this.registerHoverLinkSource(VIEW_TYPE, { display: 'Just Simple Calendar', defaultMod: false });
-    for (const mode of ['month', 'infinite', 'linear'] as const) this.registerBasesView(mode === 'linear' ? LINEAR_VIEW_TYPE : mode === 'infinite' ? INFINITE_VIEW_TYPE : VIEW_TYPE, {
-      name: mode === 'linear' ? 'Linear Calendar' : mode === 'infinite' ? 'Infinite Calendar' : 'Simple Calendar',
-      icon: 'calendar-days',
-      factory: (controller, containerEl) => new CalendarView(controller, containerEl, mode === 'infinite', mode === 'linear'),
-      options: (): BasesAllOptions[] => [
+    for (const mode of ['month', 'infinite', 'linear', 'agenda'] as const) this.registerBasesView(mode === 'agenda' ? AGENDA_VIEW_TYPE : mode === 'linear' ? LINEAR_VIEW_TYPE : mode === 'infinite' ? INFINITE_VIEW_TYPE : VIEW_TYPE, {
+      name: mode === 'agenda' ? 'Simple Agenda' : mode === 'linear' ? 'Linear Calendar' : mode === 'infinite' ? 'Infinite Calendar' : 'Simple Calendar',
+      icon: mode === 'agenda' ? 'list' : 'calendar-days',
+      factory: (controller, containerEl) => new CalendarView(controller, containerEl, mode === 'infinite', mode === 'linear', mode === 'agenda'),
+      options: (config): BasesAllOptions[] => [
         { type: 'property', key: 'dateProperty', displayName: 'Date property', placeholder: 'Choose a date property' },
         { type: 'property', key: 'endDateProperty', displayName: 'End date property (optional)', placeholder: 'None — single-day notes' },
         { type: 'property', key: 'titleProperty', displayName: 'Title property (optional)', placeholder: 'File name' },
         { type: 'property', key: 'colorProperty', displayName: 'Color property (optional)', placeholder: 'Default color' },
-        { type: 'property', key: 'repeatProperty', displayName: 'Repeat property (optional)', placeholder: 'None — no repetition' },
+        { type: 'group', displayName: 'Optional scheduling', items: [
+          { type: 'property', key: 'repeatProperty', displayName: 'Repeat property (optional)', placeholder: 'None - no repetition' },
+          { type: 'property', key: 'repeatUntilProperty', displayName: 'Repeat until property (optional)', placeholder: 'None - no end date', shouldHide: () => !config.getAsPropertyId('repeatProperty') },
+          { type: 'property', key: 'repeatExceptProperty', displayName: 'Skipped dates property (optional)', placeholder: 'None - no skipped dates', shouldHide: () => !config.getAsPropertyId('repeatProperty') },
+          { type: 'property', key: 'additionalDatesProperty', displayName: 'Additional dates property (optional)', placeholder: 'None - use only the main date' },
+        ] },
         { type: 'toggle', key: 'showStatus', displayName: 'Show status', default: true },
         { type: 'toggle', key: 'showHelp', displayName: 'Show help', default: true },
         { type: 'dropdown', key: 'weekStart', displayName: 'First day of week', default: '1', options: { '1': 'Monday', '0': 'Sunday' } },
@@ -62,31 +70,55 @@ class CalendarView extends BasesView implements HoverParent {
   private drag: { dates: MoveDates; from: string; resize: boolean } | null = null;
   private dropDay: HTMLElement | null = null;
   private movingNote = false;
+  private agendaRange: 'day' | 'week' = 'week';
+  private disposed = false;
+  private scheduleEditor: ScheduleModal | null = null;
 
-  constructor(controller: QueryController, parentEl: HTMLElement, private readonly infinite = false, private readonly linear = false) {
+  constructor(controller: QueryController, parentEl: HTMLElement, private readonly infinite = false, private readonly linear = false, private readonly agenda = false) {
     super(controller);
-    this.type = linear ? LINEAR_VIEW_TYPE : infinite ? INFINITE_VIEW_TYPE : VIEW_TYPE;
+    this.type = agenda ? AGENDA_VIEW_TYPE : linear ? LINEAR_VIEW_TYPE : infinite ? INFINITE_VIEW_TYPE : VIEW_TYPE;
     this.root = parentEl.createDiv({ cls: 'jsc-calendar' });
     this.root.toggleClass('jsc-infinite', infinite);
     this.root.toggleClass('jsc-linear', linear);
-    if (linear) {
-      parentEl.addClass('jsc-linear-container');
-      this.register(() => parentEl.removeClass('jsc-linear-container'));
-    }
+    this.root.toggleClass('jsc-agenda', agenda);
+    if (agenda) this.shownMonth = localDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+    const containerClass = linear ? 'jsc-linear-container' : infinite ? 'jsc-infinite-container' : 'jsc-month-container';
+    parentEl.addClass(containerClass);
+    this.register(() => parentEl.removeClass(containerClass));
     const toolbar = this.root.createDiv({ cls: 'jsc-toolbar' });
     this.title = toolbar.createEl('h3', { cls: 'jsc-month', attr: { 'aria-live': 'polite' } });
     const nav = toolbar.createDiv({ cls: 'jsc-navigation' });
-    if (!infinite) {
+    if (agenda) {
+      const period = nav.createEl('select', { attr: { 'aria-label': 'Agenda period' } });
+      period.createEl('option', { value: 'day', text: 'Day' });
+      period.createEl('option', { value: 'week', text: 'Week' });
+      period.value = this.agendaRange;
+      this.registerDomEvent(period, 'change', () => {
+        this.agendaRange = period.value === 'day' ? 'day' : 'week';
+        this.config.set('agendaRange', this.agendaRange);
+        this.render();
+      });
+      this.addButton(nav, 'Previous period', 'chevron-left', () => this.moveAgenda(-1));
+    } else if (!infinite) {
       this.addButton(nav, 'Previous year', 'chevrons-left', () => this.moveMonth(-12));
       if (!linear) this.addButton(nav, 'Previous month', 'chevron-left', () => this.moveMonth(-1));
     }
     const today = nav.createEl('button', { text: 'Today', attr: { type: 'button' } });
     this.registerDomEvent(today, 'click', () => {
-      this.shownMonth = localDate(new Date().getFullYear(), new Date().getMonth(), 1);
+      this.shownMonth = localDate(new Date().getFullYear(), new Date().getMonth(), agenda ? new Date().getDate() : 1);
       this.pendingToday = true;
       this.render();
     });
-    if (!infinite) {
+    if (agenda) {
+      this.addButton(nav, 'Next period', 'chevron-right', () => this.moveAgenda(1));
+      const date = nav.createEl('input', { type: 'date', attr: { 'aria-label': 'Go to date' } });
+      this.registerDomEvent(date, 'change', () => {
+        if (parseDay(date.value) !== date.value) return;
+        const [year, month, day] = date.value.split('-').map(Number);
+        this.shownMonth = localDate(year, month - 1, day);
+        this.render();
+      });
+    } else if (!infinite) {
       if (!linear) this.addButton(nav, 'Next month', 'chevron-right', () => this.moveMonth(1));
       this.addButton(nav, 'Next year', 'chevrons-right', () => this.moveMonth(12));
     }
@@ -130,16 +162,23 @@ class CalendarView extends BasesView implements HoverParent {
       });
     }, true);
     this.registerDomEvent(this.grid, 'click', (event) => {
+      const action = this.isNode(event.target) && event.target.instanceOf(Element) ? event.target.closest<HTMLElement>('[data-jsc-action]') : null;
+      if (action) {
+        event.preventDefault(); event.stopPropagation();
+        if (action.dataset.jscAction === 'create') void this.createNote(action.dataset.date!);
+        else { const note = this.noteElement(action); if (note) { const rect = action.getBoundingClientRect(); this.showMenu(note, rect.left, rect.bottom); } }
+        return;
+      }
       if (this.followTitleLink(event)) return;
       const el = this.noteElement(event.target);
       if (!el || this.titleLink(event.target)) return;
       event.preventDefault();
-      if (Platform.isMobile) this.openElement(el);
+      if (Platform.isMobile || this.agenda) this.openElement(el);
     }, true);
     this.registerDomEvent(this.grid, 'auxclick', event => { this.followTitleLink(event); }, true);
     this.registerDomEvent(this.grid, 'dblclick', (event) => {
       const el = this.noteElement(event.target);
-      if (Platform.isMobile || this.titleLink(event.target) || this.resizeHandle(event.target)) return;
+      if (Platform.isMobile || this.agenda || (this.isNode(event.target) && event.target.instanceOf(Element) && event.target.closest('button')) || this.titleLink(event.target) || this.resizeHandle(event.target)) return;
       event.preventDefault();
       if (el) {
         const mode = this.config.get('doubleClickAction');
@@ -153,6 +192,7 @@ class CalendarView extends BasesView implements HoverParent {
     // Handle focused calendar keys before Bases' document-level shortcuts.
     this.registerDomEvent(this.root.win, 'keydown', (event) => {
       if (!this.isNode(event.target) || !this.grid.contains(event.target)) return;
+      if (event.target.instanceOf(Element) && event.target.closest('button')) return;
       const titleLink = this.titleLink(event.target);
       if (titleLink) {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -296,6 +336,23 @@ class CalendarView extends BasesView implements HoverParent {
     return parseDay(text) ? text : value instanceof DateValue ? value.dateOnly().toString() : text;
   }
 
+  private propertyValue(entry: BasesEntry, key: string): unknown {
+    const property = this.config.getAsPropertyId(key);
+    if (!property) return undefined;
+    const parsed = parsePropertyId(property);
+    const fm = this.app.metadataCache.getFileCache(entry.file)?.frontmatter;
+    if (parsed.type === 'note' && fm && Object.prototype.hasOwnProperty.call(fm, parsed.name)) return fm[parsed.name];
+    const value = entry.getValue(property);
+    if (value instanceof ListValue) return Array.from({ length: value.length() }, (_, i) => value.get(i).toString());
+    return value && !(value instanceof NullValue) ? value.toString() : undefined;
+  }
+
+  private schedulePropertyConflict(): boolean {
+    const keys = ['dateProperty', 'endDateProperty', 'repeatProperty', 'repeatUntilProperty', 'repeatExceptProperty', 'additionalDatesProperty'];
+    const values = keys.map(key => this.config.getAsPropertyId(key));
+    return values.some((value, index) => index >= 3 && value && values.some((other, i) => i !== index && value === other));
+  }
+
   private dayAtPoint(x: number, y: number): HTMLElement | null {
     const hit = this.grid.doc.elementFromPoint(x, y);
     const week = hit?.closest('.jsc-week');
@@ -417,6 +474,11 @@ class CalendarView extends BasesView implements HoverParent {
     this.render();
   }
 
+  private moveAgenda(direction: number): void {
+    this.shownMonth = addDays(this.shownMonth, direction * (this.agendaRange === 'day' ? 1 : 7));
+    this.render();
+  }
+
   onDataUpdated(): void { this.render(); }
 
   private captureAnchor(): ScrollAnchor | null {
@@ -465,19 +527,21 @@ class CalendarView extends BasesView implements HoverParent {
   private render(savedAnchor?: ScrollAnchor | null): void {
     if (!this.data || !this.config || this.drag) return;
     const anchor = this.infinite ? savedAnchor ?? this.captureAnchor() : null;
-    const active = this.infinite ? this.root.doc.activeElement : null;
+    const active = this.root.doc.activeElement;
     const focusedNote = active && this.grid.contains(active) ? this.noteElement(active) : null;
     const focusedDay = active && this.grid.contains(active) ? this.dayElement(active) : null;
     this.rendering = true;
     try {
     const property = this.config.getAsPropertyId('dateProperty');
     const endProperty = this.config.getAsPropertyId('endDateProperty');
-    const titleProperty = this.config.getAsPropertyId('titleProperty');
-    const colorProperty = this.config.getAsPropertyId('colorProperty');
-    const repeatProperty = this.config.getAsPropertyId('repeatProperty');
     this.status.hidden = this.config.get('showStatus') === false;
     this.help.hidden = this.config.get('showHelp') === false;
     const weekStart = this.config.get('weekStart') === '0' ? 0 : 1;
+    if (this.agenda) {
+      this.agendaRange = this.config.get('agendaRange') === 'day' ? 'day' : 'week';
+      const period = this.root.querySelector<HTMLSelectElement>('select[aria-label="Agenda period"]');
+      if (period) period.value = this.agendaRange;
+    }
     const month = this.shownMonth.getMonth();
     const year = this.shownMonth.getFullYear();
     this.title.setText(this.linear ? String(year) : new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(this.shownMonth));
@@ -508,36 +572,43 @@ class CalendarView extends BasesView implements HoverParent {
     }
     const days = this.linear
       ? yearMonths(year).flat()
+      : this.agenda ? agendaDays(this.shownMonth, weekStart, this.agendaRange)
       : this.infinite
       ? weekWindow(this.firstWeek!, Math.max(40, Math.ceil(this.viewport.clientHeight / 90) + 24))
       : monthDays(year, month, weekStart);
-    const monthFirst = dayKey(localDate(year, this.linear ? 0 : month, 1));
-    const monthLast = dayKey(localDate(year, this.linear ? 12 : month + 1, 0));
-    const spans: {start: string; end: string; entry: BasesEntry; time: string; repeating: boolean}[] = [];
+    const monthFirst = this.agenda || this.infinite ? dayKey(days[0]) : dayKey(localDate(year, this.linear ? 0 : month, 1));
+    const monthLast = this.agenda || this.infinite ? dayKey(days[days.length - 1]) : dayKey(localDate(year, this.linear ? 12 : month + 1, 0));
+    const spans: EventSpan[] = [];
     let undated = 0;
     let invalidEnds = 0;
-    let inMonth = 0;
-    let invalidRepeats = 0;
+    const inMonth = new Set<string>();
+    let occurrences = 0;
+    const warnings = new Map<string, number>();
+    const scheduleConflict = this.schedulePropertyConflict();
+    if (scheduleConflict) warnings.set('Choose different properties for optional scheduling (optional fields ignored)', 1);
     let limitedRepeats = 0;
     for (const entry of this.data.data) {
       const start = this.dateText(entry, property);
       const end = endProperty ? this.dateText(entry, endProperty) : null;
-      const range = dateRange(start, end);
-      if (!range) { undated++; continue; }
-      if (range.invalidEnd) invalidEnds++;
-      const repeat = repeatProperty ? entry.getValue(repeatProperty)?.toString().trim() ?? '' : '';
-      const rule = repeatRule(repeat);
-      if (repeat && !rule) invalidRepeats++;
-      const projected = rule ? repeatSpans(range, rule, dayKey(days[0]), dayKey(days[days.length - 1])) : { spans: [range], limited: false };
+      const repeatValue = this.propertyValue(entry, 'repeatProperty');
+      const repeat = typeof repeatValue === 'string' ? repeatValue.trim() : repeatValue == null ? '' : 'Invalid repeat';
+      const projected = projectSchedule(start, end, repeat, dayKey(days[0]), dayKey(days[days.length - 1]), {
+        ...(scheduleConflict ? {} : { until: this.propertyValue(entry, 'repeatUntilProperty'), except: this.propertyValue(entry, 'repeatExceptProperty'), additional: this.propertyValue(entry, 'additionalDatesProperty') }),
+      });
+      if (!projected) { undated++; continue; }
+      if (projected.invalidEnd) invalidEnds++;
+      for (const warning of projected.warnings) warnings.set(warning, (warnings.get(warning) ?? 0) + 1);
       if (projected.limited) limitedRepeats++;
       const startTime = eventTime(start);
-      const endTime = range.invalidEnd ? '' : eventTime(end);
+      const endTime = projected.invalidEnd ? '' : eventTime(end);
       const time = startTime && endTime ? `${startTime}–${endTime}` : startTime || (endTime ? `until ${endTime}` : '');
       for (const occurrence of projected.spans) {
-        if (occurrence.start <= monthLast && occurrence.end >= monthFirst) inMonth++;
-        if (occurrence.start <= dayKey(days[days.length - 1]) && occurrence.end >= dayKey(days[0])) spans.push({...occurrence, entry, time, repeating: !!rule});
+        if (occurrence.start <= monthLast && occurrence.end >= monthFirst) { inMonth.add(entry.file.path); occurrences++; }
+        spans.push({ ...occurrence, entry, time, kind: projected.kind, warnings: projected.warnings, movable: projected.kind === 'single' && !repeat && !projected.warnings.length });
       }
     }
+    if (this.agenda) this.renderAgenda(days, spans);
+    else {
     const weekdayFormat = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
     if (this.infinite) this.weekdays.createDiv({ cls: 'jsc-weekday', attr: { 'aria-hidden': 'true' } });
     const headingDays = this.linear ? weekWindow(startOfWeek(localDate(year, 0, 1), weekStart), 6).slice(0, 37) : days.slice(0, 7);
@@ -578,58 +649,19 @@ class CalendarView extends BasesView implements HoverParent {
         outline.style.gridColumn = `${columnOffset} / span ${weekDays.length}`;
       }
       for (const segment of segments) {
-        const {entry, start, end, time, repeating} = spans[segment.index];
-        const titleValue = titleProperty ? entry.getValue(titleProperty) : null;
-        this.entries.set(entry.file.path, entry.file);
-        // Moving a projected occurrence must not silently reschedule the series.
-        const dates = repeating ? null : this.moveDates(entry.file, start, end);
-        if (dates) this.moves.set(entry.file.path, dates);
-        const note = week.createDiv({
-          cls: 'jsc-note',
-          attr: { role: 'link', tabindex: '0', 'data-path': entry.file.path, draggable: String(!!dates && !Platform.isMobile),
-            'data-start': keys[segment.column], 'data-end': keys[segment.column + segment.length - 1] },
-        });
-        const label = note.createSpan({ cls: 'jsc-title' });
-        this.renderTitle(label, titleValue, entry.file);
-        if (!label.textContent?.trim()) label.setText(entry.file.basename);
-        const title = label.textContent;
-        if (time && (!this.linear || start !== end)) note.createSpan({ cls: 'jsc-time', text: time });
-        if (repeating) note.addClass('jsc-repeating');
-        note.title = `${title} — ${start === end ? start : `${start} through ${end}`}${time ? ` · ${time}` : ''}${repeating ? ' · Repeats (edit the source note to change the series)' : ''}`;
-        note.setAttribute('aria-label', `${note.title}${segment.continuesBefore ? ' (continued)' : ''}`);
-        for (const link of note.querySelectorAll<HTMLElement>(TITLE_LINK)) {
-          link.draggable = false;
-          link.setAttribute('role', 'link');
-          link.tabIndex = 0;
-          if (link.hasClass('internal-link')) {
-            const path = parseLinktext(link.dataset.href ?? '').path;
-            link.toggleClass('is-unresolved', !!path && !this.app.metadataCache.getFirstLinkpathDest(path, entry.file.path));
-          }
-        }
-        if (this.linear && start === end) label.remove();
-        if (dates?.endProperty && dates.endProperty !== dates.startProperty && !segment.continuesAfter && !Platform.isMobile) {
-          note.addClass('jsc-resizable');
-          note.createSpan({ cls: 'jsc-resize-handle', attr: { draggable: 'true', 'aria-hidden': 'true', title: 'Drag to resize end date' } });
-        }
+        const note = this.renderNote(week, spans[segment.index], keys[segment.column], keys[segment.column + segment.length - 1], segment.continuesBefore, segment.continuesAfter);
         note.style.gridColumn = `${segment.column + columnOffset} / span ${segment.length}`;
         note.style.gridRow = String(segment.lane + 2);
-        note.toggleClass('jsc-continues-before', segment.continuesBefore);
-        note.toggleClass('jsc-continues-after', segment.continuesAfter);
-        note.toggleClass('jsc-multiday', start !== end);
-        const colorValue = colorProperty ? entry.getValue(colorProperty) : null;
-        const color = eventColor(colorValue instanceof StringValue ? colorValue.toString() : null);
-        if (color) {
-          note.style.setProperty('--jsc-event-color', color);
-          note.addClass('jsc-colored');
-        }
       }
     }
-    const count = this.infinite ? spans.length : inMonth;
-    const parts = [this.config.getDisplayName(property), `${count} ${count === 1 ? 'event' : 'events'} ${this.infinite ? 'in loaded weeks' : this.linear ? 'this year' : 'this month'}`];
+    }
+    const count = inMonth.size;
+    const parts = [this.config.getDisplayName(property), `${count} ${count === 1 ? 'note' : 'notes'} ${this.agenda ? 'in this period' : this.infinite ? 'in loaded weeks' : this.linear ? 'this year' : 'this month'}`];
+    if (occurrences > count) parts.push(`${occurrences} occurrences`);
     if (endProperty) parts.push(`End: ${this.config.getDisplayName(endProperty)}`);
     if (undated) parts.push(`${undated} without a valid date`);
     if (invalidEnds) parts.push(`${invalidEnds} with an invalid end date (shown on start date)`);
-    if (invalidRepeats) parts.push(`${invalidRepeats} with an unsupported repeat rule (shown once)`);
+    for (const [warning, count] of warnings) parts.push(`${count}: ${warning}`);
     if (limitedRepeats) parts.push(`${limitedRepeats} series limited to 500 occurrences in loaded dates`);
     this.status.setText(parts.join(' · '));
     if (this.infinite && this.viewport.clientHeight > 0) {
@@ -639,11 +671,11 @@ class CalendarView extends BasesView implements HoverParent {
       this.layoutWidth = this.viewport.clientWidth;
       this.layoutHeight = this.viewport.clientHeight;
       this.updateScrollLabel();
+    }
       const focusTarget = focusedNote
         ? [...this.grid.querySelectorAll<HTMLElement>('.jsc-note')].find(el => el.dataset.path === focusedNote.dataset.path && el.dataset.start === focusedNote.dataset.start)
         : focusedDay ? this.grid.querySelector<HTMLElement>(`[data-date="${focusedDay.dataset.date}"]`) : null;
       focusTarget?.focus({ preventScroll: true });
-    }
     } finally {
       this.rendering = false;
     }
@@ -654,14 +686,138 @@ class CalendarView extends BasesView implements HoverParent {
     if (file) void this.openFile(file, mode);
   }
 
+  private renderNote(parent: HTMLElement, span: EventSpan, first: string, last: string, before = false, after = false): HTMLElement {
+    const { entry, start, end, time, kind } = span;
+    const titleProperty = this.config.getAsPropertyId('titleProperty');
+    const colorProperty = this.config.getAsPropertyId('colorProperty');
+    this.entries.set(entry.file.path, entry.file);
+    const dates = span.movable ? this.moveDates(entry.file, start, end) : null;
+    if (dates) this.moves.set(entry.file.path, dates);
+    const note = parent.createDiv({ cls: 'jsc-note', attr: {
+      role: 'link', tabindex: '0', 'data-path': entry.file.path,
+      draggable: String(!!dates && !Platform.isMobile && !this.agenda), 'data-start': first, 'data-end': last,
+    } });
+    const label = note.createSpan({ cls: 'jsc-title' });
+    this.renderTitle(label, titleProperty ? entry.getValue(titleProperty) : null, entry.file);
+    if (!label.textContent?.trim()) label.setText(entry.file.basename);
+    const title = label.textContent;
+    if (time && (!this.linear || start !== end)) note.createSpan({ cls: 'jsc-time', text: time });
+    const schedule = kind === 'repeat' ? 'Repeats - opens the same note' : kind === 'additional' ? 'Multiple dates - opens the same note' : '';
+    note.title = `${title} - ${start === end ? start : `${start} through ${end}`}${time ? ` · ${time}` : ''}${schedule ? ` · ${schedule}` : ''}${span.warnings.length ? ` · ${span.warnings.join(' · ')}` : ''}`;
+    note.setAttribute('aria-label', `${note.title}${before ? ' (continued)' : ''}`);
+    note.toggleClass('jsc-repeating', kind === 'repeat');
+    note.toggleClass('jsc-additional', kind === 'additional');
+    note.toggleClass('jsc-schedule-warning', !!span.warnings.length);
+    for (const link of note.querySelectorAll<HTMLElement>(TITLE_LINK)) {
+      link.draggable = false; link.setAttribute('role', 'link'); link.tabIndex = 0;
+      if (link.hasClass('internal-link')) {
+        const path = parseLinktext(link.dataset.href ?? '').path;
+        link.toggleClass('is-unresolved', !!path && !this.app.metadataCache.getFirstLinkpathDest(path, entry.file.path));
+      }
+    }
+    if (this.linear && start === end) label.remove();
+    if (!this.agenda && dates?.endProperty && dates.endProperty !== dates.startProperty && !after && !Platform.isMobile) {
+      note.addClass('jsc-resizable');
+      note.createSpan({ cls: 'jsc-resize-handle', attr: { draggable: 'true', 'aria-hidden': 'true', title: 'Drag to resize end date' } });
+    }
+    if (!this.agenda) {
+      note.toggleClass('jsc-continues-before', before); note.toggleClass('jsc-continues-after', after);
+    }
+    note.toggleClass('jsc-multiday', start !== end);
+    const colorValue = colorProperty ? entry.getValue(colorProperty) : null;
+    const color = eventColor(colorValue instanceof StringValue ? colorValue.toString() : null);
+    if (color) { note.style.setProperty('--jsc-event-color', color); note.addClass('jsc-colored'); }
+    if (this.agenda) {
+      if (schedule) note.createSpan({ cls: 'jsc-schedule-label', text: kind === 'repeat' ? 'Repeats · same note' : 'Multiple dates · same note' });
+      if (start !== end) note.createSpan({ cls: 'jsc-schedule-label', text: `${start} - ${end}` });
+      const menu = note.createEl('button', { cls: 'jsc-note-menu', attr: { type: 'button', 'aria-label': `Actions for ${title}`, 'data-jsc-action': 'menu' } });
+      setIcon(menu, 'ellipsis');
+    }
+    return note;
+  }
+
+  private renderAgenda(days: Date[], spans: EventSpan[]): void {
+    const format = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    this.title.setText(days.length === 1 ? format.format(days[0]) : `${format.format(days[0])} - ${format.format(days[days.length - 1])}`);
+    const picker = this.root.querySelector<HTMLInputElement>('input[aria-label="Go to date"]');
+    if (picker) picker.value = dayKey(this.shownMonth);
+    this.help.setText('Choose day or week · open a note or use its actions · + creates a note on that day');
+    const full = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    for (const date of days) {
+      const day = dayKey(date);
+      const section = this.grid.createEl('section', { cls: 'jsc-day jsc-agenda-day', attr: { 'data-date': day, 'aria-label': full.format(date), tabindex: '0' } });
+      section.toggleClass('jsc-today', day === dayKey(new Date()));
+      const header = section.createDiv({ cls: 'jsc-agenda-heading' });
+      header.createEl('h4').createEl('time', { text: full.format(date), attr: { datetime: day } });
+      const create = header.createEl('button', { attr: { type: 'button', 'aria-label': `Create note on ${day}`, 'data-jsc-action': 'create', 'data-date': day } });
+      setIcon(create, 'plus');
+      create.disabled = !this.writableDateProperty();
+      const events = spans.filter(span => span.start <= day && span.end >= day).sort((a, b) => a.time.localeCompare(b.time));
+      for (const span of events) this.renderNote(section, span, day, day);
+      if (!events.length) section.createEl('p', { cls: 'jsc-agenda-empty', text: 'No events' });
+    }
+  }
+
+  private async editSchedule(file: TFile, repeating: boolean): Promise<void> {
+    try {
+      const keys = ['dateProperty', 'endDateProperty', 'repeatProperty', 'repeatUntilProperty', 'repeatExceptProperty', 'additionalDatesProperty'];
+      const config = keys.map(key => this.config.getAsPropertyId(key));
+      const names = config.map(id => id && parsePropertyId(id).type === 'note' ? parsePropertyId(id).name : null);
+      if (!names[0] || config.filter(Boolean).length !== new Set(config.filter(Boolean)).size) throw new Error('Choose different properties for the main date, end date and optional scheduling fields.');
+      const source = await this.app.vault.read(file);
+      const info = getFrontMatterInfo(source);
+      const value: unknown = info.exists ? parseYaml(info.frontmatter) : {};
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Repair this note\'s properties before editing its dates.');
+      const fm = value as Record<string, unknown>;
+      const first = fm[names[0]];
+      const firstDay = typeof first === 'string' ? parseDay(first) : null;
+      if (!firstDay) throw new Error('Choose a writable main date property with a valid date.');
+      const repeatValue = names[2] ? fm[names[2]] : undefined;
+      const repeat = typeof repeatValue === 'string' ? repeatValue.trim() : repeatValue == null ? '' : 'Invalid repeat';
+      if (repeating ? !repeatRule(repeat) : !!repeat || names[1] && fm[names[1]] && (typeof fm[names[1]] !== 'string' || parseDay(fm[names[1]] as string) !== firstDay)) {
+        throw new Error(repeating ? 'Choose a valid repeat rule first.' : 'Additional dates are for a single-day note without repetition.');
+      }
+      const daysName = names[repeating ? 4 : 5];
+      const untilName = repeating ? names[3] : null;
+      if (!daysName && !untilName) throw new Error('Choose the optional scheduling properties in this Base view first. Formula properties are read-only.');
+      const expected = names.filter((name): name is string => !!name).map(name => [name, JSON.stringify(fm[name])] as const);
+      const path = file.path;
+      if (this.disposed) return;
+      this.scheduleEditor = new ScheduleModal(this.app, {
+        title: repeating ? 'Repeat options' : 'Additional dates', firstDay, repeating,
+        days: daysName ? fm[daysName] : undefined, until: untilName ? fm[untilName] : undefined,
+        editDays: !!daysName, editUntil: !!untilName,
+        save: async draft => {
+          if (this.disposed || file.path !== path || keys.some((key, index) => this.config.getAsPropertyId(key) !== config[index])) throw new Error('The note or view configuration changed. Reopen this editor.');
+          await this.app.fileManager.processFrontMatter(file, (current: Record<string, unknown>) => {
+            if (this.disposed || file.path !== path || keys.some((key, index) => this.config.getAsPropertyId(key) !== config[index])) throw new Error('The note or view configuration changed. Reopen this editor.');
+            if (expected.some(([key, value]) => JSON.stringify(current[key]) !== value)) throw new Error('The schedule changed elsewhere. Your draft was kept; reopen the editor to use the new dates.');
+            if (daysName) { if (draft.days.length) Object.defineProperty(current, daysName, { value: draft.days, enumerable: true, writable: true, configurable: true }); else delete current[daysName]; }
+            if (untilName) { if (draft.until) Object.defineProperty(current, untilName, { value: draft.until, enumerable: true, writable: true, configurable: true }); else delete current[untilName]; }
+          });
+        },
+      });
+      this.scheduleEditor.open();
+    } catch (error) { new Notice(error instanceof Error ? error.message : 'Could not open the date editor.'); }
+  }
+
   private showMenu(el: HTMLElement, x: number, y: number): void {
     const file = this.entries.get(el.dataset.path ?? '');
     if (!file) return;
-    new Menu()
+    const menu = new Menu()
       .addItem(item => item.setTitle('Open note').setIcon('file-text').onClick(() => this.openFile(file, 'current')))
       .addItem(item => item.setTitle('Open in new tab').setIcon('file-plus').onClick(() => this.openFile(file, 'tab')))
-      .addItem(item => item.setTitle('Open to the right').setIcon('panel-right').onClick(() => this.openFile(file, 'right')))
-      .addSeparator()
+      .addItem(item => item.setTitle('Open to the right').setIcon('panel-right').onClick(() => this.openFile(file, 'right')));
+    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    const repeatId = this.config.getAsPropertyId('repeatProperty');
+    const repeat = repeatId && parsePropertyId(repeatId).type === 'note' ? String(fm?.[parsePropertyId(repeatId).name] ?? '').trim() : '';
+    if (repeatRule(repeat) && (this.config.getAsPropertyId('repeatUntilProperty') || this.config.getAsPropertyId('repeatExceptProperty'))) {
+      menu.addItem(item => item.setTitle('Repeat options…').setIcon('repeat').onClick(() => this.editSchedule(file, true)));
+    }
+    if (!repeat && this.config.getAsPropertyId('additionalDatesProperty')) {
+      menu.addItem(item => item.setTitle('Additional dates…').setIcon('calendar-plus').onClick(() => this.editSchedule(file, false)));
+    }
+    menu.addSeparator()
       .addItem(item => item.setTitle('Delete note').setIcon('trash-2').setWarning(true).onClick(() => this.deleteNote(file)))
       .showAtPosition({ x, y });
   }
@@ -703,6 +859,8 @@ class CalendarView extends BasesView implements HoverParent {
   }
 
   onunload(): void {
+    this.disposed = true;
+    this.scheduleEditor?.close();
     this.hoverPopover?.unload();
     this.entries.clear();
     this.moves.clear();
