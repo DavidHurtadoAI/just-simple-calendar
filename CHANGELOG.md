@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.0
+
+- Add a compact Month period to Simple Agenda, alongside Day and Week. The monthly list shows days with events and keeps note actions accessible in a narrow pane. ([#14](https://github.com/DavidHurtadoAI/just-simple-calendar/issues/14))
+- Use a List property as the primary date source in any calendar view. Each valid date shows the same note once. Select a regional day/month or month/day format when needed, and optionally create new notes with a one-item date list. ([#15](https://github.com/DavidHurtadoAI/just-simple-calendar/issues/15))
+
+Validated with 38 unit tests, the release audit and desktop Obsidian, including a 360-pixel pane and the existing 16-scenario calendar regression suite.
+
 ## 1.6.0
 
 - Add Simple Agenda, a single-column day/week Base view with full titles, times, date navigation, empty days, explicit creation/actions and touch-sized controls.

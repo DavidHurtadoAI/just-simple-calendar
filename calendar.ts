@@ -162,22 +162,30 @@ export function repeatSpans(span: CalendarSpan, rule: RepeatRule, first: string,
 export const DATE_LIST_LIMIT = 128;
 
 /** A list always means individual ISO calendar days, never a range or a rule. */
-export function dateList(value: unknown): { days: string[]; invalid: number; limited: boolean } {
+export function dateList(value: unknown, order?: 'dmy' | 'mdy'): { days: string[]; invalid: number; limited: boolean } {
   if (value === undefined || value === null || value === '') return { days: [], invalid: 0, limited: false };
   const values = Array.isArray(value) ? value : [value];
   const days = new Set<string>();
   let invalid = 0;
   for (const item of values.slice(0, DATE_LIST_LIMIT)) {
-    if (typeof item === 'string' && parseDay(item) === item.trim()) days.add(item.trim());
+    const text = typeof item === 'string' ? item.trim() : '';
+    let day = parseDay(text) === text ? text : null;
+    const regional = !day && order && /^(\d{1,2})([/.-])(\d{1,2})\2(\d{4})$/.exec(text);
+    if (regional) {
+      const [, first, , second, year] = regional;
+      const [month, date] = order === 'dmy' ? [second, first] : [first, second];
+      day = parseDay(`${year}-${month.padStart(2, '0')}-${date.padStart(2, '0')}`);
+    }
+    if (day) days.add(day);
     else invalid++;
   }
   return { days: [...days].sort(), invalid, limited: values.length > DATE_LIST_LIMIT };
 }
 
-export interface ScheduleOptions { until?: unknown; except?: unknown; additional?: unknown }
+export interface ScheduleOptions { until?: unknown; except?: unknown; additional?: unknown; dateOrder?: 'dmy' | 'mdy' }
 export interface ScheduleProjection {
   spans: CalendarSpan[];
-  kind: 'single' | 'repeat' | 'additional';
+  kind: 'single' | 'repeat' | 'additional' | 'list';
   invalidEnd: boolean;
   warnings: string[];
   limited: boolean;
@@ -187,7 +195,16 @@ export interface ScheduleProjection {
  * Limits apply to occurrence START dates. Invalid bounds never create an
  * accidentally unbounded series; the source event stays visible for repair.
  */
-export function projectSchedule(start: string, end: string | null, repeat: string, first: string, last: string, options: ScheduleOptions = {}): ScheduleProjection | null {
+export function projectSchedule(start: string | unknown[], end: string | null, repeat: string, first: string, last: string, options: ScheduleOptions = {}): ScheduleProjection | null {
+  if (Array.isArray(start)) {
+    const { days, invalid, limited } = dateList(start, options.dateOrder);
+    const warnings: string[] = [];
+    if (invalid) warnings.push('Invalid dates in date property (check the date list format)');
+    if (limited) warnings.push('Date property limited to 128 values');
+    if (!days.length && !warnings.length) return null;
+    const spans = days.filter(day => day >= first && day <= last).map(day => ({ start: day, end: day }));
+    return { spans, kind: 'list', invalidEnd: false, warnings, limited: false };
+  }
   const range = dateRange(start, end);
   if (!range) return null;
   const warnings: string[] = [];
@@ -227,8 +244,13 @@ export function projectSchedule(start: string, end: string | null, repeat: strin
   return { spans: spans.filter(span => span.start <= last && span.end >= first), kind, invalidEnd: range.invalidEnd, warnings, limited };
 }
 
-export function agendaDays(day: Date, weekStart: number, range: 'day' | 'week'): Date[] {
-  return range === 'day' ? [localDate(day.getFullYear(), day.getMonth(), day.getDate())] : weekWindow(startOfWeek(day, weekStart), 1);
+export type AgendaRange = 'day' | 'week' | 'month';
+
+export function agendaDays(day: Date, weekStart: number, range: AgendaRange): Date[] {
+  const year = day.getFullYear();
+  const month = day.getMonth();
+  if (range === 'month') return Array.from({ length: localDate(year, month + 1, 0).getDate() }, (_, index) => localDate(year, month, index + 1));
+  return range === 'day' ? [localDate(year, month, day.getDate())] : weekWindow(startOfWeek(day, weekStart), 1);
 }
 export interface WeekSegment {
   index: number;

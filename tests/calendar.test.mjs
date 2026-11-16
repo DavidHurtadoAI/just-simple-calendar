@@ -17,6 +17,27 @@ test('additional dates keep the main event and never create duplicate occurrence
   assert.deepEqual(result.warnings,[]);
 });
 
+test('the primary date list projects independent days with an explicit regional order', () => {
+  const dates = ['2026-11-02', '2/11/2026', '12.11.2026', '2026-10-31', '31/11/2026', '2026-11-07T10:00', 5];
+  const project = dateOrder => projectSchedule(dates, '2026-11-25', 'weekly', '2026-11-01', '2026-11-30', { dateOrder, additional: ['2026-11-20'] });
+  const result = project('dmy');
+  assert.deepEqual(result.spans, ['2026-11-02', '2026-11-12'].map(day => ({ start: day, end: day })));
+  assert.equal(result.kind, 'list');
+  assert.equal(result.warnings.length, 1);
+  assert.deepEqual(project('mdy').spans.map(span => span.start), ['2026-11-02']);
+  assert.deepEqual(project(undefined).spans.map(span => span.start), ['2026-11-02']);
+  assert.deepEqual(dateList(['11/2/2026', '11-12-2026'], 'mdy').days, ['2026-11-02', '2026-11-12']);
+  assert.equal(projectSchedule([], null, '', '2026-11-01', '2026-11-30'), null);
+  assert.equal(projectSchedule(Array(129).fill('2026-11-02'), null, '', '2026-11-01', '2026-11-30').warnings.length, 1);
+});
+
+test('the compact month contains exactly that month across leap years and year boundaries', () => {
+  for (const [year, month, length] of [[2024, 1, 29], [2026, 1, 28], [2026, 11, 31], [2027, 0, 31]]) {
+    const expected = Array.from({ length }, (_, day) => dayKey(localDate(year, month, day + 1)));
+    for (const start of [0, 1]) assert.deepEqual(agendaDays(localDate(year, month, 15), start, 'month').map(dayKey), expected);
+  }
+});
+
 test('adding dates does not change a multi-day event, invalid range or repeat series', () => {
   for(const [start,end,repeat] of [['2026-11-02','2026-11-04',''],['2026-11-02','bad',''],['2026-11-02',null,'weekly'],['2026-11-02',null,'invalid']]){
     const plain=projectSchedule(start,end,repeat,'2026-11-01','2026-11-30');

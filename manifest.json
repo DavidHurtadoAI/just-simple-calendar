@@ -1,9 +1,9 @@
 {
   "id": "just-simple-calendar",
   "name": "Just Simple Calendar",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "minAppVersion": "1.10.2",
-  "description": "Monthly, continuous, yearly and day/week agenda views for Bases, with note dates, optional recurring schedules and quick actions. Local and dependency-free.",
+  "description": "Monthly, continuous, yearly and day/week/month agenda views for Bases, with note dates, date lists, optional recurring schedules and quick actions. Local and dependency-free.",
   "author": "David Hurtado",
   "authorUrl": "https://github.com/DavidHurtadoAI",
   "isDesktopOnly": false

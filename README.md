@@ -2,7 +2,7 @@
 
 **The purpose is to make a calendar as lightweight and simple as possible, with no external libraries and no dependency on other community plugins.** That is why Just Simple Calendar exists: a small, focused way to see your notes on a calendar, using the features already built into Obsidian.
 
-It adds **four calendar view types to Bases**, including a day/week agenda. Your notes remain ordinary Markdown files, your dates remain ordinary properties, and your Base keeps control of filtering and sorting. There is no separate event database, calendar framework, React runtime, account, or remote service.
+It adds **four calendar view types to Bases**, including a day/week/month agenda. Your notes remain ordinary Markdown files, your dates remain ordinary properties, and your Base keeps control of filtering and sorting. There is no separate event database, calendar framework, React runtime, account, or remote service.
 
 ![A month of single-day events and continuous multi-day bars in Obsidian](docs/images/calendar-overview.png)
 
@@ -11,7 +11,7 @@ It adds **four calendar view types to Bases**, including a day/week agenda. Your
 - Monthly calendar with **Previous year**, **Previous month**, **Today**, **Next month**, and **Next year**.
 - A second **Infinite Calendar** view: scroll up into the past or down into the future through a continuous stream of weeks.
 - A **Linear Calendar** view: a whole year with one month per row and aligned weekdays.
-- A **Simple Agenda** view: complete note titles, optional times and accessible actions in a single column, showing one day or one week.
+- A **Simple Agenda** view: complete note titles, optional times and accessible actions in a single column, showing one day, week or month.
 - A selectable start date and an optional, inclusive end date.
 - An optional title property instead of the file name, with automatic fallback for missing or blank values.
 - An optional color property: eight native color names or a custom hex color.
@@ -24,7 +24,7 @@ It adds **four calendar view types to Bases**, including a day/week agenda. Your
 - Create a blank note from an empty day with its date already filled in.
 - Monday or Sunday week start, keyboard support, and styling that follows your theme.
 
-The JavaScript is less than **40 KiB uncompressed**, including the agenda and optional date-picker editors. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
+The JavaScript is less than **42 KiB uncompressed**, including the agenda and optional date-picker editors. The plugin has **zero runtime package dependencies**; only Obsidian's own API is external to the bundle. Development tools are not shipped with the plugin.
 
 ## Install
 
@@ -37,7 +37,7 @@ Requires **Obsidian 1.10.2 or later**, with the built-in **Bases** feature enabl
 ## Set up a calendar
 
 1. Create or open a Base.
-2. Open its view settings and choose **Simple Calendar** for a month, **Infinite Calendar** for continuous weeks, **Linear Calendar** for a year, or **Simple Agenda** for a day/week list.
+2. Open its view settings and choose **Simple Calendar** for a month, **Infinite Calendar** for continuous weeks, **Linear Calendar** for a year, or **Simple Agenda** for a day/week/month list.
 3. Set **Date property** to your start date property, such as `start_date`.
 4. Optionally set **End date property (optional)** to `end_date`.
 5. Optionally set **Title property (optional)** to the property you want to display, such as `title`.
@@ -107,11 +107,11 @@ Month totals count **distinct notes**, not the number of occupied days. Ranges a
 
 ## Simple Agenda
 
-Choose **Simple Agenda** in the Base's view settings. Use **Day / Week**, the previous/next buttons, **Today** or the native date picker. The selected period is saved in this Base view. Week boundaries follow your Monday/Sunday setting.
+Choose **Simple Agenda** in the Base's view settings. Use **Day / Week / Month**, the previous/next buttons, **Today** or the native date picker. The selected period is saved in this Base view. Week boundaries follow your Monday/Sunday setting.
 
 ![Simple Agenda at 360 CSS pixels, with complete titles, times and accessible note actions](docs/images/agenda-mobile.png)
 
-Each day has its own **+** button to create a dated note. Click or tap a note to open it; use its **three-dot button** for opening options, deletion and any optional schedule editors enabled in this view. Keyboard opening and native hover previews also work. Empty days stay visible so you can plan them.
+Each day shown has a **+** button to create a dated note. Click or tap a note to open it. The **three-dot button** offers opening options, deletion and any optional schedule editors enabled in this view. Keyboard opening and native hover previews also work. Day and Week show empty days for planning. Month shows only dates with events so you can scan it quickly.
 
 All-day notes appear before timed notes; notes with the same start time retain the Base's order. A multi-day note appears on each occupied day, with its full date range. Repeated and additional-date appearances identify that they open the same note. No note is duplicated. The footer counts distinct notes and, when different, occurrences.
 
@@ -217,6 +217,12 @@ The plugin uses web and Obsidian APIs compatible with desktop and mobile. Physic
 - Viewing and opening notes does not rewrite them. Creating, rescheduling, and deleting notes are explicit actions.
 
 This is an independent plugin, not an official Obsidian product.
+
+## Use a list as the date property
+
+Choose a **List** property as the view's **Date property**. Each valid date in the list displays the same note once on that day. Edit the list in the note's Properties editor. End dates and optional recurrence settings apply to notes with a single Date or Datetime property.
+
+Lists accept ISO dates (`YYYY-MM-DD`). To also accept dates such as `15/11/2026`, set **Date list format** to **Day/month/year** or **Month/day/year**. Invalid entries are reported in the view status. Lists support up to 128 entries. Enable **Create new notes with a date list** to have the calendar's new-note action write a one-item list.
 
 ## Optional scheduling
 
