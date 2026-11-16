@@ -3,7 +3,7 @@ import {
   type BasesAllOptions, type BasesEntry, type HoverParent, type HoverPopover, type QueryController,
   type TFile, type Value, type WorkspaceLeaf,
 } from 'obsidian';
-import { addDays, agendaDays, dayKey, eventColor, eventTime, layoutDays, localDate, monthDays, parseDay, projectSchedule, repeatRule, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths, type ScheduleProjection } from './calendar';
+import { addDays, agendaDays, dayKey, eventColor, eventTime, layoutDays, localDate, monthDays, parseDay, projectSchedule, repeatRule, resizedEnd, shiftedDates, startOfWeek, weekWindow, yearMonths, type AgendaRange, type ScheduleProjection } from './calendar';
 import { ScheduleModal } from './schedule-modal';
 
 const VIEW_TYPE = 'just-simple-calendar';
@@ -17,6 +17,10 @@ type EventSpan = { start: string; end: string; entry: BasesEntry; time: string; 
 const DRAG_TYPE = 'application/x-just-simple-calendar';
 const TITLE_LINK = '.jsc-title :is(a, .internal-link, .external-link)';
 
+function agendaRange(value: unknown): AgendaRange {
+  return value === 'day' || value === 'month' ? value : 'week';
+}
+
 export default class JustSimpleCalendar extends Plugin {
   onload(): void {
     this.registerHoverLinkSource(VIEW_TYPE, { display: 'Just Simple Calendar', defaultMod: false });
@@ -25,7 +29,9 @@ export default class JustSimpleCalendar extends Plugin {
       icon: mode === 'agenda' ? 'list' : 'calendar-days',
       factory: (controller, containerEl) => new CalendarView(controller, containerEl, mode === 'infinite', mode === 'linear', mode === 'agenda'),
       options: (config): BasesAllOptions[] => [
-        { type: 'property', key: 'dateProperty', displayName: 'Date property', placeholder: 'Choose a date property' },
+        { type: 'property', key: 'dateProperty', displayName: 'Date property', placeholder: 'Choose a date or list property' },
+        { type: 'toggle', key: 'createDateList', displayName: 'Create new notes with a date list', default: false },
+        { type: 'dropdown', key: 'dateListOrder', displayName: 'Date list format', default: 'iso', options: { iso: 'YYYY-MM-DD', dmy: 'Day/month/year', mdy: 'Month/day/year' } },
         { type: 'property', key: 'endDateProperty', displayName: 'End date property (optional)', placeholder: 'None — single-day notes' },
         { type: 'property', key: 'titleProperty', displayName: 'Title property (optional)', placeholder: 'File name' },
         { type: 'property', key: 'colorProperty', displayName: 'Color property (optional)', placeholder: 'Default color' },
@@ -70,7 +76,7 @@ class CalendarView extends BasesView implements HoverParent {
   private drag: { dates: MoveDates; from: string; resize: boolean } | null = null;
   private dropDay: HTMLElement | null = null;
   private movingNote = false;
-  private agendaRange: 'day' | 'week' = 'week';
+  private agendaRange: AgendaRange = 'week';
   private disposed = false;
   private scheduleEditor: ScheduleModal | null = null;
 
@@ -92,9 +98,10 @@ class CalendarView extends BasesView implements HoverParent {
       const period = nav.createEl('select', { attr: { 'aria-label': 'Agenda period' } });
       period.createEl('option', { value: 'day', text: 'Day' });
       period.createEl('option', { value: 'week', text: 'Week' });
+      period.createEl('option', { value: 'month', text: 'Month' });
       period.value = this.agendaRange;
       this.registerDomEvent(period, 'change', () => {
-        this.agendaRange = period.value === 'day' ? 'day' : 'week';
+        this.agendaRange = agendaRange(period.value);
         this.config.set('agendaRange', this.agendaRange);
         this.render();
       });
@@ -326,11 +333,13 @@ class CalendarView extends BasesView implements HoverParent {
     }
   }
 
-  private dateText(entry: BasesEntry, property: Parameters<BasesEntry['getValue']>[0]): string {
+  private dateValue(entry: BasesEntry, property: Parameters<BasesEntry['getValue']>[0]): string | unknown[] {
     const parsed = parsePropertyId(property);
     const raw: unknown = parsed.type === 'note' ? this.app.metadataCache.getFileCache(entry.file)?.frontmatter?.[parsed.name] : null;
+    if (Array.isArray(raw)) return raw as unknown[];
     if (typeof raw === 'string' && parseDay(raw)) return raw.trim();
     const value = entry.getValue(property);
+    if (value instanceof ListValue) return Array.from({ length: value.length() }, (_, i) => value.get(i).toString());
     if (!value?.isTruthy()) return '';
     const text = value.toString();
     return parseDay(text) ? text : value instanceof DateValue ? value.dateOnly().toString() : text;
@@ -458,8 +467,9 @@ class CalendarView extends BasesView implements HoverParent {
     try {
       // Bases chooses the folder, unique name and filter-derived properties.
       // Its native new-note popover lets the user name and edit the blank note.
+      const value = this.config.get('createDateList') === true ? [day] : day;
       await this.createFileForView(undefined, frontmatter => {
-        Object.defineProperty(frontmatter, property, { value: day, enumerable: true, writable: true, configurable: true });
+        Object.defineProperty(frontmatter, property, { value, enumerable: true, writable: true, configurable: true });
       });
     } catch (error) {
       console.error('Just Simple Calendar: could not create note', error);
@@ -475,6 +485,7 @@ class CalendarView extends BasesView implements HoverParent {
   }
 
   private moveAgenda(direction: number): void {
+    if (this.agendaRange === 'month') { this.moveMonth(direction); return; }
     this.shownMonth = addDays(this.shownMonth, direction * (this.agendaRange === 'day' ? 1 : 7));
     this.render();
   }
@@ -538,7 +549,7 @@ class CalendarView extends BasesView implements HoverParent {
     this.help.hidden = this.config.get('showHelp') === false;
     const weekStart = this.config.get('weekStart') === '0' ? 0 : 1;
     if (this.agenda) {
-      this.agendaRange = this.config.get('agendaRange') === 'day' ? 'day' : 'week';
+      this.agendaRange = agendaRange(this.config.get('agendaRange'));
       const period = this.root.querySelector<HTMLSelectElement>('select[aria-label="Agenda period"]');
       if (period) period.value = this.agendaRange;
     }
@@ -586,21 +597,25 @@ class CalendarView extends BasesView implements HoverParent {
     const warnings = new Map<string, number>();
     const scheduleConflict = this.schedulePropertyConflict();
     if (scheduleConflict) warnings.set('Choose different properties for optional scheduling (optional fields ignored)', 1);
+    const order = this.config.get('dateListOrder');
+    const dateOrder = order === 'dmy' || order === 'mdy' ? order : undefined;
     let limitedRepeats = 0;
     for (const entry of this.data.data) {
-      const start = this.dateText(entry, property);
-      const end = endProperty ? this.dateText(entry, endProperty) : null;
+      const start = this.dateValue(entry, property);
+      const endValue = endProperty ? this.dateValue(entry, endProperty) : null;
+      const end = Array.isArray(endValue) ? 'Invalid date' : endValue;
       const repeatValue = this.propertyValue(entry, 'repeatProperty');
       const repeat = typeof repeatValue === 'string' ? repeatValue.trim() : repeatValue == null ? '' : 'Invalid repeat';
       const projected = projectSchedule(start, end, repeat, dayKey(days[0]), dayKey(days[days.length - 1]), {
+        dateOrder,
         ...(scheduleConflict ? {} : { until: this.propertyValue(entry, 'repeatUntilProperty'), except: this.propertyValue(entry, 'repeatExceptProperty'), additional: this.propertyValue(entry, 'additionalDatesProperty') }),
       });
       if (!projected) { undated++; continue; }
       if (projected.invalidEnd) invalidEnds++;
       for (const warning of projected.warnings) warnings.set(warning, (warnings.get(warning) ?? 0) + 1);
       if (projected.limited) limitedRepeats++;
-      const startTime = eventTime(start);
-      const endTime = projected.invalidEnd ? '' : eventTime(end);
+      const startTime = typeof start === 'string' ? eventTime(start) : '';
+      const endTime = projected.kind === 'list' || projected.invalidEnd ? '' : eventTime(end);
       const time = startTime && endTime ? `${startTime}–${endTime}` : startTime || (endTime ? `until ${endTime}` : '');
       for (const occurrence of projected.spans) {
         if (occurrence.start <= monthLast && occurrence.end >= monthFirst) { inMonth.add(entry.file.path); occurrences++; }
@@ -702,11 +717,13 @@ class CalendarView extends BasesView implements HoverParent {
     if (!label.textContent?.trim()) label.setText(entry.file.basename);
     const title = label.textContent;
     if (time && (!this.linear || start !== end)) note.createSpan({ cls: 'jsc-time', text: time });
-    const schedule = kind === 'repeat' ? 'Repeats - opens the same note' : kind === 'additional' ? 'Multiple dates - opens the same note' : '';
+    const multipleDates = kind === 'additional' || kind === 'list';
+    const schedule = kind === 'repeat' ? 'Repeats - opens the same note' : multipleDates ? 'Multiple dates - opens the same note' : '';
     note.title = `${title} - ${start === end ? start : `${start} through ${end}`}${time ? ` · ${time}` : ''}${schedule ? ` · ${schedule}` : ''}${span.warnings.length ? ` · ${span.warnings.join(' · ')}` : ''}`;
     note.setAttribute('aria-label', `${note.title}${before ? ' (continued)' : ''}`);
     note.toggleClass('jsc-repeating', kind === 'repeat');
-    note.toggleClass('jsc-additional', kind === 'additional');
+    note.toggleClass('jsc-additional', multipleDates);
+    note.toggleClass('jsc-date-list', kind === 'list');
     note.toggleClass('jsc-schedule-warning', !!span.warnings.length);
     for (const link of note.querySelectorAll<HTMLElement>(TITLE_LINK)) {
       link.draggable = false; link.setAttribute('role', 'link'); link.tabIndex = 0;
@@ -738,13 +755,15 @@ class CalendarView extends BasesView implements HoverParent {
 
   private renderAgenda(days: Date[], spans: EventSpan[]): void {
     const format = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    this.title.setText(days.length === 1 ? format.format(days[0]) : `${format.format(days[0])} - ${format.format(days[days.length - 1])}`);
+    if (this.agendaRange !== 'month') this.title.setText(days.length === 1 ? format.format(days[0]) : `${format.format(days[0])} - ${format.format(days[days.length - 1])}`);
     const picker = this.root.querySelector<HTMLInputElement>('input[aria-label="Go to date"]');
     if (picker) picker.value = dayKey(this.shownMonth);
-    this.help.setText('Choose day or week · open a note or use its actions · + creates a note on that day');
+    this.help.setText('Open a note or use its actions · + creates a note on that day');
     const full = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     for (const date of days) {
       const day = dayKey(date);
+      const events = spans.filter(span => span.start <= day && span.end >= day).sort((a, b) => a.time.localeCompare(b.time));
+      if (this.agendaRange === 'month' && !events.length) continue;
       const section = this.grid.createEl('section', { cls: 'jsc-day jsc-agenda-day', attr: { 'data-date': day, 'aria-label': full.format(date), tabindex: '0' } });
       section.toggleClass('jsc-today', day === dayKey(new Date()));
       const header = section.createDiv({ cls: 'jsc-agenda-heading' });
@@ -752,10 +771,10 @@ class CalendarView extends BasesView implements HoverParent {
       const create = header.createEl('button', { attr: { type: 'button', 'aria-label': `Create note on ${day}`, 'data-jsc-action': 'create', 'data-date': day } });
       setIcon(create, 'plus');
       create.disabled = !this.writableDateProperty();
-      const events = spans.filter(span => span.start <= day && span.end >= day).sort((a, b) => a.time.localeCompare(b.time));
       for (const span of events) this.renderNote(section, span, day, day);
       if (!events.length) section.createEl('p', { cls: 'jsc-agenda-empty', text: 'No events' });
     }
+    if (!this.grid.childElementCount) this.grid.createEl('p', { cls: 'jsc-agenda-empty', text: 'No events this month' });
   }
 
   private async editSchedule(file: TFile, repeating: boolean): Promise<void> {
@@ -811,10 +830,10 @@ class CalendarView extends BasesView implements HoverParent {
     const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
     const repeatId = this.config.getAsPropertyId('repeatProperty');
     const repeat = repeatId && parsePropertyId(repeatId).type === 'note' ? String(fm?.[parsePropertyId(repeatId).name] ?? '').trim() : '';
-    if (repeatRule(repeat) && (this.config.getAsPropertyId('repeatUntilProperty') || this.config.getAsPropertyId('repeatExceptProperty'))) {
+    if (!el.hasClass('jsc-date-list') && repeatRule(repeat) && (this.config.getAsPropertyId('repeatUntilProperty') || this.config.getAsPropertyId('repeatExceptProperty'))) {
       menu.addItem(item => item.setTitle('Repeat options…').setIcon('repeat').onClick(() => this.editSchedule(file, true)));
     }
-    if (!repeat && this.config.getAsPropertyId('additionalDatesProperty')) {
+    if (!el.hasClass('jsc-date-list') && !repeat && this.config.getAsPropertyId('additionalDatesProperty')) {
       menu.addItem(item => item.setTitle('Additional dates…').setIcon('calendar-plus').onClick(() => this.editSchedule(file, false)));
     }
     menu.addSeparator()
